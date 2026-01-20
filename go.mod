@@ -3,8 +3,7 @@ module github.com/FrogoAI/memory
 go 1.25.5
 
 require (
-	dario.cat/mergo v1.0.2
-	github.com/AlekSi/pointer v1.2.0
+	github.com/FrogoAI/packer v1.0.0
 	github.com/FrogoAI/set v1.0.0
 	github.com/FrogoAI/testutils v0.0.0-20260120141156-9cd2d6874ef4
 	github.com/mfonda/simhash v0.0.0-20151007195837-79f94a1100d6
@@ -20,5 +19,4 @@ require (
 require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

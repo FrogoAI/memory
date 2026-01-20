@@ -7,7 +7,7 @@ import (
 	"hash/fnv"
 	"math"
 
-	"github.com/FrogoAI/memory/dataconv"
+	"github.com/FrogoAI/packer"
 )
 
 type filter struct {
@@ -119,7 +119,7 @@ func (f *CountingFilter) Reset() {
 
 // ToBytes serializes the CountingFilter to a byte slice.
 func (f *CountingFilter) ToBytes() ([]byte, error) {
-	enc := dataconv.NewBinaryEncoder()
+	enc := packer.NewBinaryEncoder()
 
 	err := enc.Encode(f.m)
 	if err != nil {
@@ -145,7 +145,7 @@ func NewCountingFromBytes(data []byte) (*CountingFilter, error) {
 		return nil, ErrEmptyDump
 	}
 
-	dec := dataconv.NewBinaryDecoder(data)
+	dec := packer.NewBinaryDecoder(data)
 
 	res := &CountingFilter{
 		filter: &filter{
