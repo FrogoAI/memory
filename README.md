@@ -21,7 +21,6 @@
 - **LRU Cache (`lru`):** A generic, thread-safe Least Recently Used cache implementation.
 - **Ordered Map (`orderedmap`):** A map that maintains insertion order, supporting iteration and index-based access.
 - **Registry (`registry`):** A thread-safe structure for grouping items by ID and Category, useful for managing active sessions or grouped workers.
-- **Set (`set`):** Generic `DataSet` and `OrderedDataSet` implementations for O(1) lookups.
 - **Stack (`stack`):** A classic LIFO stack implementation with slice-based backing.
 - **Sorted Set (`sortedset`):** (Redis-like) ZSET implementation for storing unique elements with scores.
 
