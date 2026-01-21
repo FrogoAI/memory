@@ -40,7 +40,7 @@ func (l *LSHIndex) Add(id string, signature []uint32) {
 	}
 }
 
-func (l *LSHIndex) Query(signature []uint32) []string {
+func (l *LSHIndex) Query(signature []uint32) ([]string, error) {
 	candidates := make(map[string]struct{})
 
 	for b := 0; b < l.numBands; b++ {
@@ -50,7 +50,10 @@ func (l *LSHIndex) Query(signature []uint32) []string {
 
 		h := fnv.New64a()
 		for _, val := range bandSignature {
-			fmt.Fprintf(h, "%d", val)
+			_, err := fmt.Fprintf(h, "%d", val)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		bandHash := fmt.Sprintf("%x", h.Sum64())
@@ -67,5 +70,5 @@ func (l *LSHIndex) Query(signature []uint32) []string {
 		result = append(result, id)
 	}
 
-	return result
+	return result, nil
 }

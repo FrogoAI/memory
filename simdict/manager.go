@@ -16,13 +16,16 @@ func NewLSHManager() *LSHManager {
 	}
 }
 
-func (m *LSHManager) ProcessAndAssign(docID string) string {
+func (m *LSHManager) ProcessAndAssign(docID string) (string, error) {
 	// 1. Generate Signature
 	shingles := shingle(docID, shingleSize)
 	signature := createSignature(shingles, numHashes)
 
 	// 2. Query for Candidates
-	candidates := m.lshIndex.Query(signature)
+	candidates, err := m.lshIndex.Query(signature)
+	if err != nil {
+		return "", err
+	}
 
 	var bucketID string
 
@@ -59,5 +62,5 @@ func (m *LSHManager) ProcessAndAssign(docID string) string {
 		m.bucketMembers[bucketID] = append(m.bucketMembers[bucketID], docID)
 	}
 
-	return bucketID
+	return bucketID, nil
 }

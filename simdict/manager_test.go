@@ -37,7 +37,12 @@ func TestManager(t *testing.T) {
 			return
 		}
 
-		bucketID := manager.ProcessAndAssign(res)
+		bucketID, err := manager.ProcessAndAssign(res)
+		if err != nil {
+			slog.Error("error normalize email", "email", email, "err", err)
+			return
+		}
+
 		fmt.Printf("Email: '%-25s' -> Assigned to Bucket: '%s'\n", email, bucketID)
 	}
 
@@ -85,7 +90,12 @@ func TestManager(t *testing.T) {
 			return
 		}
 
-		bucketID := manager.ProcessAndAssign(res)
+		bucketID, err := manager.ProcessAndAssign(res)
+		if err != nil {
+			slog.Error("error normalize email", "err", err)
+			return
+		}
+
 		fmt.Printf("Name: '%-7s %-7s' -> Assigned to Bucket: '%s'\n", name[0], name[1], bucketID)
 	}
 
