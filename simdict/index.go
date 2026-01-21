@@ -19,7 +19,7 @@ func NewLSHIndex(numBands, rowsPerBand int) *LSHIndex {
 	}
 }
 
-func (l *LSHIndex) Add(id string, signature []uint32) {
+func (l *LSHIndex) Add(id string, signature []uint32) error {
 	for b := 0; b < l.numBands; b++ {
 		start := b * l.rowsPerBand
 		end := start + l.rowsPerBand
@@ -27,7 +27,10 @@ func (l *LSHIndex) Add(id string, signature []uint32) {
 
 		h := fnv.New64a()
 		for _, val := range bandSignature {
-			fmt.Fprintf(h, "%d", val)
+			_, err := fmt.Fprintf(h, "%d", val)
+			if err != nil {
+				return err
+			}
 		}
 
 		bandHash := fmt.Sprintf("%x", h.Sum64())
@@ -38,6 +41,8 @@ func (l *LSHIndex) Add(id string, signature []uint32) {
 
 		l.bands[b][bandHash] = append(l.bands[b][bandHash], id)
 	}
+
+	return nil
 }
 
 func (l *LSHIndex) Query(signature []uint32) ([]string, error) {

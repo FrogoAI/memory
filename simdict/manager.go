@@ -19,7 +19,11 @@ func NewLSHManager() *LSHManager {
 func (m *LSHManager) ProcessAndAssign(docID string) (string, error) {
 	// 1. Generate Signature
 	shingles := shingle(docID, shingleSize)
-	signature := createSignature(shingles, numHashes)
+
+	signature, err := createSignature(shingles, numHashes)
+	if err != nil {
+		return "", err
+	}
 
 	// 2. Query for Candidates
 	candidates, err := m.lshIndex.Query(signature)
@@ -56,7 +60,11 @@ func (m *LSHManager) ProcessAndAssign(docID string) (string, error) {
 	// 5. Update all data structures
 	// Check if already processed to avoid re-adding
 	if _, exists := m.docSignatures[docID]; !exists {
-		m.lshIndex.Add(docID, signature)
+		err := m.lshIndex.Add(docID, signature)
+		if err != nil {
+			return "", err
+		}
+
 		m.docSignatures[docID] = signature
 		m.docBuckets[docID] = bucketID
 		m.bucketMembers[bucketID] = append(m.bucketMembers[bucketID], docID)

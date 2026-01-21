@@ -22,7 +22,7 @@ func shingle(text string, k int) map[string]struct{} {
 	return shingles
 }
 
-func createSignature(shingles map[string]struct{}, numHashes int) []uint32 {
+func createSignature(shingles map[string]struct{}, numHashes int) ([]uint32, error) {
 	signature := make([]uint32, numHashes)
 	for i := range signature {
 		signature[i] = math.MaxUint32
@@ -31,8 +31,16 @@ func createSignature(shingles map[string]struct{}, numHashes int) []uint32 {
 	for s := range shingles {
 		for i := 0; i < numHashes; i++ {
 			h := fnv.New32()
-			fmt.Fprintf(h, "%d", i) // Seed
-			h.Write([]byte(s))
+
+			_, err := fmt.Fprintf(h, "%d", i) // Seed
+			if err != nil {
+				return nil, err
+			}
+
+			_, err = h.Write([]byte(s))
+			if err != nil {
+				return nil, err
+			}
 
 			hashValue := h.Sum32()
 			if hashValue < signature[i] {
@@ -41,7 +49,7 @@ func createSignature(shingles map[string]struct{}, numHashes int) []uint32 {
 		}
 	}
 
-	return signature
+	return signature, nil
 }
 
 func jaccardFromSignatures(sig1, sig2 []uint32) float64 {
