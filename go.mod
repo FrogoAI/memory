@@ -12,7 +12,7 @@ require (
 	github.com/spf13/cast v1.10.0
 	github.com/sugarme/tokenizer v0.3.0
 	github.com/twmb/murmur3 v1.1.8
-	go.mongodb.org/mongo-driver v1.17.6
+	go.mongodb.org/mongo-driver v1.17.7
 	golang.org/x/text v0.33.0
 )
 
