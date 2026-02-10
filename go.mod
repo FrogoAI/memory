@@ -13,7 +13,7 @@ require (
 	github.com/sugarme/tokenizer v0.3.0
 	github.com/twmb/murmur3 v1.1.8
 	go.mongodb.org/mongo-driver v1.17.6
-	golang.org/x/text v0.33.0
+	golang.org/x/text v0.34.0
 )
 
 require (
