@@ -2,155 +2,179 @@
 
 > A high-performance collection of generic data structures and algorithms for Go.
 
-`memory` provides a suite of specialized, type-safe in-memory data structures optimized for efficiency and specific use cases. Unlike the standard library's container packages, this repository offers advanced algorithms like **Counting Bloom Filters**, **Fuzzy Search**, and **Ordered Maps**, all built using Go 1.18+ generics.
+`memory` provides specialized, type-safe in-memory data structures optimized for efficiency. Unlike the standard library's container packages, this library offers advanced algorithms like **Counting Bloom Filters**, **HyperLogLog**, **Fuzzy Search**, **B-trees**, and **Sorted Sets**, all built using Go generics.
 
-## Features
+Data structures are **not thread-safe by default** (matching Go stdlib convention). Thread-safe wrappers (`Safe*`) are provided where needed.
 
-### 🧠 Probabilistic Data Structures
+## Packages
 
-- **Bloom Filter (`bloom`):** Space-efficient probabilistic data structure for checking if an element is in a set. Includes a **Counting Bloom Filter** that supports removals.
-- **HyperLogLog (`hll`):** Efficient cardinality estimation for large datasets.
-### 🔍 Search & String Algo
+### Probabilistic Data Structures
 
-- **Fuzzy Search (`fuzzysearch`):** Fast, lightweight fuzzy matching. Supports simple subsequence matching and **Levenshtein distance** ranking.
+| Package | Description |
+|---------|-------------|
+| **bloom** | Counting Bloom Filter with Add/Remove/Test and binary serialization |
+| **hll** | HyperLogLog cardinality estimator with Union and Intersection |
 
-### 📦 Containers & Caches
+### Search & String Algorithms
 
-- **LRU Cache (`lru`):** A generic, thread-safe Least Recently Used cache implementation.
-- **Ordered Map (`orderedmap`):** A map that maintains insertion order, supporting iteration and index-based access.
-- **Registry (`registry`):** A thread-safe structure for grouping items by ID and Category, useful for managing active sessions or grouped workers.
-- **Stack (`stack`):** A classic LIFO stack implementation with slice-based backing.
-- **Sorted Set (`sortedset`):** (Redis-like) ZSET implementation for storing unique elements with scores.
+| Package | Description |
+|---------|-------------|
+| **fuzzysearch** | Fuzzy string matching with Levenshtein distance ranking |
+
+### Ordered Collections
+
+| Package | Description |
+|---------|-------------|
+| **btree** | B-tree for ordered key-value storage with configurable order |
+| **sortedset** | Redis-like ZSET (skip list) with scoring, ranking, and range queries |
+| **linkedlist** | Doubly-linked list with ID-based O(1) lookup |
+| **orderedmap** | Map that maintains insertion order |
+| **stack** | Generic LIFO stack |
+
+### Caches & Registries
+
+| Package | Description |
+|---------|-------------|
+| **lru** | LRU cache with automatic eviction |
+| **registry** | Thread-safe grouped item registry (sessions, workers, connections) |
+
+### Infrastructure
+
+| Package | Description |
+|---------|-------------|
+| **comparator** | Type-aware comparison functions (int, string, float, time, etc.) |
+| **utils** | SafeMap, SafeList (thread-safe), hashing (CRC, Murmur3, SimHash), string helpers |
+
+### Thread-Safe Wrappers
+
+| Wrapper | Wraps | Use when |
+|---------|-------|----------|
+| `sortedset.SafeSortedSet` | `SortedSet` | Concurrent access to sorted set |
+| `orderedmap.SafeOrderedMap` | `OrderedMap` | Concurrent access to ordered map |
+| `utils.SafeMap` | `map[K]V` | Concurrent access to map |
+| `utils.SafeList` | `[]V` | Concurrent access to slice |
 
 ## Installation
 
-Bash
-
-```
+```bash
 go get github.com/FrogoAI/memory
 ```
 
 ## Usage Examples
 
-### 1. Counting Bloom Filter
+### Counting Bloom Filter
 
-Check for existence with a defined false-positive rate, with support for removing items.
+```go
+filter, err := bloom.NewCounting(1000, 0.01) // 1000 items, 1% false-positive rate
+if err != nil {
+    panic(err)
+}
 
-Go
-
+filter.Add([]byte("user_123"))
+filter.Test([]byte("user_123")) // true
+filter.Remove([]byte("user_123"))
+filter.Test([]byte("user_123")) // false
 ```
-package main
 
-import (
-	"fmt"
-	"github.com/FrogoAI/memory/bloom"
-)
+### B-Tree
 
-func main() {
-	// Initialize for 1000 items with 0.01 (1%) false positive rate
-	filter, err := bloom.NewCounting(1000, 0.01)
-	if err != nil {
-		panic(err)
-	}
+```go
+tree, err := btree.NewWithIntComparator(3) // order 3
+if err != nil {
+    panic(err)
+}
 
-	data := []byte("user_123")
+tree.Put(5, "five")
+tree.Put(3, "three")
+tree.Put(7, "seven")
 
-	filter.Add(data)
+value, found, _ := tree.Get(5) // "five", true
+keys := tree.Keys()            // [3, 5, 7] (sorted)
+```
 
-	if filter.Test(data) {
-		fmt.Println("Item exists!")
-	}
+### Fuzzy Search
 
-	filter.Remove(data)
+```go
+targets := []string{"cartwheel", "foobar", "wheel", "baz"}
+
+matches := fuzzysearch.Find("whl", targets) // ["cartwheel", "wheel"]
+
+ranks := fuzzysearch.RankFind("wheel", targets)
+for _, r := range ranks {
+    fmt.Printf("%s (distance: %d)\n", r.Target, r.Distance)
 }
 ```
 
-### 2. Fuzzy Search & Ranking
+### LRU Cache
 
-Find strings that approximately match a target, ranked by Levenshtein distance.
+```go
+cache := lru.NewLRUCache[string](2) // capacity 2
 
-Go
-
+cache.Put("a", "alpha")
+cache.Put("b", "beta")
+cache.Get("a")             // "alpha", true — promotes to front
+cache.Put("c", "charlie")  // evicts "b"
+cache.Get("b")             // "", false
 ```
-package main
 
-import (
-	"fmt"
-	"github.com/FrogoAI/memory/fuzzysearch"
-)
+### Sorted Set (Redis-like ZSET)
 
-func main() {
-	targets := []string{"cartwheel", "foobar", "wheel", "baz"}
-	
-	// Find simple matches (subsequence)
-	matches := fuzzysearch.Find("whl", targets)
-	fmt.Println(matches) // ["cartwheel", "wheel"]
+```go
+ss := sortedset.NewSortedSet[int, string](comparator.IntComparator)
 
-	// Rank by Levenshtein distance
-	ranks := fuzzysearch.RankFind("wheel", targets)
-	for _, r := range ranks {
-		fmt.Printf("Target: %s, Distance: %d\n", r.Target, r.Distance)
-	}
+ss.Upsert(100, "alice")
+ss.Upsert(200, "bob")
+ss.Upsert(50, "charlie")
+
+top := ss.GetTop(2, false) // bob (200), alice (100)
+ss.FindRank("charlie")     // 1 (lowest score)
+```
+
+### Thread-Safe Sorted Set
+
+```go
+ss := sortedset.NewSafeSortedSet[int, string](comparator.IntComparator)
+
+// Safe for concurrent use from multiple goroutines
+ss.Upsert(100, "alice")
+ss.GetByValue("alice") // protected by RWMutex
+```
+
+### Registry
+
+```go
+reg := registry.NewRegistry[string, uint64, string]()
+
+reg.Add("admins", 1, "Alice")
+reg.Add("admins", 2, "Bob")
+
+for user := range reg.Iterator("admins") {
+    println(user)
 }
 ```
 
-### 3. LRU Cache
+### HyperLogLog
 
-A type-safe cache that automatically evicts the least recently used items.
+```go
+h, _ := hll.New()
 
-Go
+h.Add([]byte("user1"))
+h.Add([]byte("user2"))
+h.Add([]byte("user1")) // duplicate
 
-```
-package main
-
-import (
-	"fmt"
-	"github.com/FrogoAI/memory/lru"
-)
-
-func main() {
-	// Create a cache with capacity 2
-	cache := lru.NewLRUCache[string](2)
-
-	cache.Put("a", "alpha")
-	cache.Put("b", "beta")
-	
-	val, found := cache.Get("a") // "a" is now most recently used
-	
-	cache.Put("c", "charlie") // Evicts "b" (least recently used)
-
-	_, foundB := cache.Get("b") // false
-	fmt.Println(foundB)
-}
+h.Count() // ~2
 ```
 
-### 4. Registry
+## Build & Test
 
-Manage grouped resources (e.g., connections per user) safely.
-
-Go
-
-```
-package main
-
-import (
-	"github.com/FrogoAI/memory/registry"
-)
-
-func main() {
-	// Key=String (GroupID), Index=Int (ItemID), Value=String (Data)
-	reg := registry.NewRegistry[string, int, string]()
-
-	// Add item 101 to group "admins"
-	reg.Add("admins", 101, "User Alice")
-	
-	// Iterate over all admins
-	for user := range reg.Iterator("admins") {
-		println(user)
-	}
-}
+```bash
+go test ./...                            # run tests
+go test -race ./...                      # with race detector
+go test -bench=. -benchmem -run="^$" ./... # benchmarks
+golangci-lint run ./...                  # lint
+make ci                                  # lint + coverage
 ```
 
 ## License
 
-[MIT](https://www.google.com/search?q=LICENSE)
+[MIT](LICENSE)

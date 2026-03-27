@@ -25,12 +25,12 @@ memory/
   fuzzysearch/        # Fuzzy string matching with Levenshtein distance ranking
   hll/                # HyperLogLog — efficient cardinality estimation
   linkedlist/         # Generic doubly-linked list with ID-based indexing
-  lru/                # Thread-safe LRU cache with generic values
-  orderedmap/         # Insertion-ordered map with thread-safe operations
+  lru/                # LRU cache with generic values
+  orderedmap/         # Insertion-ordered map (+ SafeOrderedMap thread-safe wrapper)
   registry/           # Thread-safe registry for grouping items by category and ID
-  sortedset/          # Redis-like ZSET using skip list with scoring
+  sortedset/          # Redis-like ZSET using skip list (+ SafeSortedSet thread-safe wrapper)
   stack/              # Generic LIFO stack with slice-based backing
-  utils/              # Thread-safe collections, hashing, sorting, string helpers
+  utils/              # SafeMap, SafeList (thread-safe), hashing, sorting, string helpers
 
   # --- Tooling ---
   .testcoverage.yml
@@ -123,7 +123,9 @@ Each data structure package follows a consistent pattern:
 Data structure packages are **NOT thread-safe by default** — callers synchronize externally. This matches Go stdlib (`container/list`, `container/heap`, maps, slices) and avoids forcing mutex overhead on single-goroutine users.
 
 **Exceptions** (thread-safe by design):
-- `registry/` — manages shared state across goroutines; `Group` has its own `sync.RWMutex`.
+- `registry/` — manages shared state across goroutines; `Group` uses `SafeOrderedMap` internally.
+- `sortedset/SafeSortedSet` — thread-safe wrapper around `SortedSet`.
+- `orderedmap/SafeOrderedMap` — thread-safe wrapper around `OrderedMap`.
 - `utils/SafeMap`, `utils/SafeList` — explicitly named "Safe", that's their contract.
 
 Every package comment MUST state its concurrency guarantee:
@@ -191,7 +193,7 @@ for _, tc := range cases {
 - Test boundary conditions: nil inputs, empty collections, max capacity, zero values.
 - Thread-safe packages must have concurrent tests (use `-race` flag).
 - Benchmarks go in `*_test.go` files using `b.Run` for sub-benchmarks.
-- Coverage threshold: 35%+ overall (`.testcoverage.yml`), increasing over time.
+- Coverage threshold: 80% overall, 80% per package (`.testcoverage.yml`).
 
 ### Benchmarks
 
