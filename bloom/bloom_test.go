@@ -294,3 +294,147 @@ func TestDump(t *testing.T) {
 
 	testutils.Equal(t, f2.Test(baz), true)
 }
+
+func TestMarshalBinaryRoundTrip(t *testing.T) {
+	cases := []struct {
+		name   string
+		add    [][]byte
+		remove [][]byte
+	}{
+		{
+			name: "empty filter",
+		},
+		{
+			name: "single element",
+			add:  [][]byte{foo},
+		},
+		{
+			name:   "add then remove",
+			add:    [][]byte{foo, bar},
+			remove: [][]byte{foo},
+		},
+		{
+			name: "many elements",
+			add:  [][]byte{foo, bar, baz, []byte("qux"), []byte("quux")},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := NewCounting(100, 0.01)
+			testutils.Equal(t, err, nil)
+
+			for _, d := range tc.add {
+				f.Add(d)
+			}
+
+			for _, d := range tc.remove {
+				f.Remove(d)
+			}
+
+			data, err := f.MarshalBinary()
+			testutils.Equal(t, err, nil)
+
+			restored := &CountingFilter{}
+			err = restored.UnmarshalBinary(data)
+			testutils.Equal(t, err, nil)
+
+			for _, d := range tc.add {
+				expected := true
+
+				for _, r := range tc.remove {
+					if string(d) == string(r) {
+						expected = false
+
+						break
+					}
+				}
+
+				testutils.Equal(t, restored.Test(d), expected)
+			}
+
+			testutils.Equal(t, restored.Test([]byte("definitely-not-in-filter")), false)
+		})
+	}
+}
+
+func TestUnmarshalBinary_Errors(t *testing.T) {
+	cases := []struct {
+		name    string
+		data    []byte
+		wantErr error
+	}{
+		{
+			name:    "empty data",
+			data:    []byte{},
+			wantErr: ErrEmptyDump,
+		},
+		{
+			name:    "nil data",
+			data:    nil,
+			wantErr: ErrEmptyDump,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &CountingFilter{}
+
+			err := f.UnmarshalBinary(tc.data)
+			if !errors.Is(err, tc.wantErr) {
+				t.Errorf("got err %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestCopy(t *testing.T) {
+	cases := []struct {
+		name   string
+		add    [][]byte
+		remove [][]byte
+	}{
+		{
+			name: "empty filter",
+		},
+		{
+			name: "single element",
+			add:  [][]byte{foo},
+		},
+		{
+			name: "multiple elements",
+			add:  [][]byte{foo, bar, baz},
+		},
+		{
+			name:   "add and remove",
+			add:    [][]byte{foo, bar, baz},
+			remove: [][]byte{foo},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := NewCounting(100, 0.01)
+			testutils.Equal(t, err, nil)
+
+			for _, d := range tc.add {
+				f.Add(d)
+			}
+
+			for _, d := range tc.remove {
+				f.Remove(d)
+			}
+
+			clone := f.Copy()
+
+			// Verify clone matches original
+			for _, d := range tc.add {
+				testutils.Equal(t, clone.Test(d), f.Test(d))
+			}
+
+			// Verify independence: modify original, clone unaffected
+			f.Add([]byte("new-item"))
+			testutils.Equal(t, clone.Test([]byte("new-item")), false)
+		})
+	}
+}

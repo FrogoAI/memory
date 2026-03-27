@@ -19,6 +19,7 @@ func NewGroup[K comparable, V any]() *Group[K, V] {
 	}
 }
 
+// Add inserts an entity into the group and calls Construct if the entity implements Constructable.
 func (g *Group[K, V]) Add(id K, e V) (err error) {
 	g.entities.Add(id, e)
 
@@ -37,27 +38,33 @@ func (g *Group[K, V]) construct(e any) (err error) {
 	return
 }
 
+// Get returns the entity with the given ID or ErrNotFoundEntity if absent.
 func (g *Group[K, V]) Get(id K) (e V, err error) {
 	if !g.entities.Exists(id) {
 		err = ErrNotFoundEntity
 		return
 	}
 
-	return g.entities.Get(id), nil
+	e, _ = g.entities.Get(id)
+
+	return e, nil
 }
 
+// Size returns the number of entities in the group.
 func (g *Group[K, V]) Size() int {
 	return g.entities.Size()
 }
 
+// CallWithLock executes f with a snapshot of the group's map and returns the result.
 func (g *Group[K, V]) CallWithLock(f func(d map[K]V) (e V, err error)) (V, error) {
 	e, err := f(g.entities.GetMap())
 	return e, err
 }
 
+// Remove deletes the entity with the given ID and calls Destroy if it implements Destroyable.
 func (g *Group[K, V]) Remove(id K) (err error) {
 	exists := g.entities.Exists(id)
-	e := g.entities.Get(id)
+	e, _ := g.entities.Get(id)
 	g.entities.Remove(id)
 
 	if exists {
@@ -76,28 +83,34 @@ func (g *Group[K, V]) destroy(e any) (err error) {
 	return
 }
 
+// GetValues returns all entity values in the group.
 func (g *Group[K, V]) GetValues() []V {
 	_, values := g.entities.GetAll()
 	return values
 }
 
+// GetKeys returns all entity keys in the group.
 func (g *Group[K, V]) GetKeys() []K {
 	keys, _ := g.entities.GetAll()
 	return keys
 }
 
+// Iterator returns a channel that yields all entity values in the group.
 func (g *Group[K, V]) Iterator() chan V {
 	return g.entities.Iterator(bufferSize)
 }
 
+// Clear removes all entities from the group.
 func (g *Group[K, V]) Clear() {
 	g.entities.Clear()
 }
 
+// GetMap returns a plain map copy of all entities in the group.
 func (g *Group[K, V]) GetMap() map[K]V {
 	return g.entities.GetMap()
 }
 
+// Tick calls Tick on every entity in the group that implements Ticker.
 func (g *Group[K, V]) Tick() {
 	ch := g.entities.Iterator(bufferSize)
 	for entity := range ch {
@@ -117,6 +130,7 @@ type item[K comparable, V any] struct {
 	data V
 }
 
+// Search iterates over all entities in parallel and sends those matching f to the result channel.
 func (g *Group[K, V]) Search(key any, result chan V, f SearchFunction) {
 	entities := make(chan item[K, V], bufferSize)
 
@@ -146,6 +160,7 @@ func (g *Group[K, V]) Search(key any, result chan V, f SearchFunction) {
 	wg.Wait()
 }
 
+// SearchOne returns the first entity matching f, or the zero value if none match.
 func (g *Group[K, V]) SearchOne(key any, f SearchFunction) (d V) {
 	for id, data := range g.GetMap() {
 		if f == nil || f(key, id, data) {

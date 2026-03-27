@@ -42,6 +42,7 @@ func (tree *Tree[K, V]) compare(a, b interface{}) int {
 	return result
 }
 
+// MinOrder is the minimum allowed order (maximum number of children) for a B-tree.
 const (
 	MinOrder = 3
 )
@@ -164,6 +165,40 @@ func (tree *Tree[K, V]) Values() []any {
 	return values
 }
 
+// Copy returns a deep copy of the tree. The new tree shares the same
+// comparator but has independent nodes. Keys and values are shallow-copied.
+func (tree *Tree[K, V]) Copy() *Tree[K, V] {
+	clone := &Tree[K, V]{
+		Comparator: tree.Comparator,
+		size:       tree.size,
+		m:          tree.m,
+	}
+
+	if tree.Root != nil {
+		clone.Root = tree.copyNode(tree.Root, nil)
+	}
+
+	return clone
+}
+
+func (tree *Tree[K, V]) copyNode(node *Node[K, V], parent *Node[K, V]) *Node[K, V] {
+	clone := &Node[K, V]{
+		Parent:   parent,
+		Entries:  make([]*Entry[K, V], len(node.Entries)),
+		Children: make([]*Node[K, V], 0, len(node.Children)),
+	}
+
+	for i, entry := range node.Entries {
+		clone.Entries[i] = &Entry[K, V]{Key: entry.Key, Value: entry.Value}
+	}
+
+	for _, child := range node.Children {
+		clone.Children = append(clone.Children, tree.copyNode(child, clone))
+	}
+
+	return clone
+}
+
 // Clear removes all nodes from the tree.
 func (tree *Tree[K, V]) Clear() {
 	tree.Root = nil
@@ -266,7 +301,7 @@ func (tree *Tree[K, V]) maxChildren() int {
 }
 
 func (tree *Tree[K, V]) minChildren() int {
-	return (tree.m + 1) / 2 // nolint:mnd
+	return (tree.m + 1) / 2 //nolint:mnd // B-tree property: minimum children = ⌈m/2⌉
 }
 
 func (tree *Tree[K, V]) maxEntries() int {
@@ -278,7 +313,7 @@ func (tree *Tree[K, V]) minEntries() int {
 }
 
 func (tree *Tree[K, V]) middle() int {
-	return (tree.m - 1) / 2 // nolint:mnd
+	return (tree.m - 1) / 2 //nolint:mnd // B-tree property: middle index = ⌊(m-1)/2⌋
 }
 
 // search searches only within the single node among its entries
@@ -288,7 +323,7 @@ func (tree *Tree[K, V]) search(node *Node[K, V], key any) (index int, found bool
 	var mid int
 
 	for low <= high {
-		mid = (high + low) / 2 // nolint:mnd
+		mid = (high + low) / 2 //nolint:mnd // standard binary search midpoint
 		compare := tree.compare(key, node.Entries[mid].Key)
 
 		switch {

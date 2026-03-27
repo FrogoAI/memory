@@ -1,3 +1,4 @@
+//nolint:revive // package name is intentional
 package utils
 
 import (
@@ -16,11 +17,22 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
+// Email parsing constants.
 const (
 	EmailTagStart = "+"
 	EmailAt       = "@"
+
+	singleKey        = 1
+	pairedKeys       = 2
+	shortIDRandBytes = 2
+	tinyIDRandBytes  = 4
+	uint32Bytes      = 4
+	crc16Bytes       = 2
+	base62Radix      = 62
+	tinyIDTrimLen    = 5
 )
 
+// ABTest assigns data to a group bucket using murmur3 hashing with the given salt and group sizes.
 func ABTest(data, salt []byte, groups ...uint64) uint64 {
 	var total uint64
 	for _, group := range groups {
@@ -34,14 +46,17 @@ func ABTest(data, salt []byte, groups ...uint64) uint64 {
 	return murmur3.Sum64(append(data, salt...)) % total
 }
 
+// SimHash returns the simhash fingerprint of the given data.
 func SimHash(data []byte) uint64 {
 	return simhash.Simhash(simhash.NewWordFeatureSet(data))
 }
 
+// SimHashCompare returns the Hamming distance between two simhash fingerprints.
 func SimHashCompare(val1, val2 uint64) uint8 {
 	return simhash.Compare(val1, val2)
 }
 
+// EmailUserName returns the local part of an email address (before the @).
 func EmailUserName(email string) string {
 	res := strings.Index(email, EmailAt)
 	if res <= -1 {
@@ -51,6 +66,7 @@ func EmailUserName(email string) string {
 	return email[:res]
 }
 
+// EmailDomain returns the domain part of an email address (after the @).
 func EmailDomain(email string) string {
 	res := strings.Index(email, EmailAt)
 	if res <= -1 {
@@ -62,14 +78,17 @@ func EmailDomain(email string) string {
 	return email[res:]
 }
 
+// SanitizeEmail lowercases the email and strips any +tag portion from the local part.
 func SanitizeEmail(email string) string {
 	return strings.Join(SplitBetweenTokens(strings.ToLower(email), EmailTagStart, EmailAt), EmailAt)
 }
 
+// NFDLowerString trims, NFD-normalizes, and lowercases the given string.
 func NFDLowerString(str string) string {
 	return strings.ToLower(norm.NFD.String(strings.TrimSpace(str)))
 }
 
+// CommonString strips all characters except letters, digits, and spaces from the string.
 func CommonString(str string) string {
 	var result strings.Builder
 
@@ -82,7 +101,8 @@ func CommonString(str string) string {
 	return result.String()
 }
 
-// SplitBetweenTokens take string and one or two tokens, and cut everything between two tokens, or between two copies of first token
+// SplitBetweenTokens takes a string and one or two tokens, and cuts
+// everything between the two tokens (or two copies of the first token).
 func SplitBetweenTokens(data string, keys ...string) []string {
 	if data == "" {
 		return []string{}
@@ -91,10 +111,10 @@ func SplitBetweenTokens(data string, keys ...string) []string {
 	var key1, key2 string
 
 	switch {
-	case len(keys) == 1: //nolint:mnd
+	case len(keys) == singleKey:
 		key1 = keys[0]
 		key2 = keys[0]
-	case len(keys) >= 2: //nolint:mnd
+	case len(keys) >= pairedKeys:
 		key1 = keys[0]
 		key2 = keys[1]
 	default:
@@ -128,21 +148,22 @@ func SplitBetweenTokens(data string, keys ...string) []string {
 
 // ByteSliceToString cast given bytes to string, without allocation memory
 func ByteSliceToString(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b)) //nolint
+	return *(*string)(unsafe.Pointer(&b)) //nolint:gosec // zero-alloc []byte→string conversion via unsafe pointer cast
 }
 
 // GetShortID return short id
 func GetShortID() ([]byte, error) {
-	b := make([]byte, 2) //nolint:mnd
+	b := make([]byte, shortIDRandBytes)
 
 	_, err := rand.Read(b)
 	if err != nil {
 		return nil, err
 	}
 
-	r := make([]byte, 4) //nolint:mnd
+	r := make([]byte, uint32Bytes)
+	//nolint:gosec // Nanosecond() returns [0, 999999999], fits in uint32
 	binary.BigEndian.PutUint32(r, uint32(time.Now().Nanosecond()))
-	src := append(b, r...) //nolint:gocritic
+	src := append(b, r...)
 	dst := make([]byte, hex.EncodedLen(len(src)))
 	hex.Encode(dst, src)
 
@@ -151,20 +172,21 @@ func GetShortID() ([]byte, error) {
 
 // GetTinyID return tiny id
 func GetTinyID() ([]byte, error) {
-	b := make([]byte, 4) //nolint:mnd
+	b := make([]byte, tinyIDRandBytes)
 
-	_, err := rand.Read(b) //nolint:gosec
+	_, err := rand.Read(b) //nolint:gosec // crypto/rand.Read is correct here; suppresses deprecated-API warning
 	if err != nil {
 		return nil, err
 	}
 
-	r := make([]byte, 4) //nolint:mnd
-	// time.Now().UnixNano()
+	r := make([]byte, uint32Bytes)
+	//nolint:gosec // Nanosecond() returns [0, 999999999], fits in uint32
 	binary.BigEndian.PutUint32(r, uint32(time.Now().Nanosecond()))
 	b = append(b, r...)
 	val := binary.BigEndian.Uint64(b)
 
-	return []byte(big.NewInt(int64(val)).Text(62))[5:], nil //nolint:mnd
+	//nolint:gosec // uint64->int64 reinterprets high bit; big.Int handles negative values correctly
+	return []byte(big.NewInt(int64(val)).Text(base62Radix))[tinyIDTrimLen:], nil
 }
 
 // Between function to get content between two keys
@@ -172,10 +194,10 @@ func Between(data string, keys ...string) string {
 	var key1, key2 string
 
 	switch {
-	case len(keys) == 1: //nolint:mnd
+	case len(keys) == singleKey:
 		key1 = keys[0]
 		key2 = keys[0]
-	case len(keys) >= 2: //nolint:mnd
+	case len(keys) >= pairedKeys:
 		key1 = keys[0]
 		key2 = keys[1]
 	default:
@@ -210,6 +232,7 @@ func SafeGet[T any](ptr *T, defaultValue T) T {
 	return *ptr
 }
 
+// MaskField replaces the middle portion of str with asterisks, keeping the specified number of characters at each end.
 func MaskField(str string, keepUnmaskedFront int, keepUnmaskedEnd int) string {
 	var result strings.Builder
 
@@ -238,6 +261,7 @@ func MaskField(str string, keepUnmaskedFront int, keepUnmaskedEnd int) string {
 	return result.String()
 }
 
+// SplitByChunks splits the string into chunks of the given size.
 func SplitByChunks(s string, chunkSize int) []string {
 	if chunkSize <= 0 {
 		return nil
@@ -259,6 +283,7 @@ func SplitByChunks(s string, chunkSize int) []string {
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyz"
 
+// RandStringBytes returns a random lowercase alphabetic string of length n.
 func RandStringBytes(n int) string {
 	if n <= 0 {
 		return ""
@@ -266,17 +291,18 @@ func RandStringBytes(n int) string {
 
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = letterBytes[mrand.IntN(len(letterBytes))] // nolint:gosec
+		b[i] = letterBytes[mrand.IntN(len(letterBytes))] //nolint:gosec // math/rand is intentional — not security-sensitive
 	}
 
 	return string(b)
 }
 
+// HashName returns a short hash of the name: its first letter followed by a hex-encoded CRC-16.
 func HashName(name string) string {
 	name = strings.ToLower(name)
 	val := crc16XModem([]byte(name))
 
-	r := make([]byte, 2) //nolint:mnd
+	r := make([]byte, crc16Bytes)
 	binary.BigEndian.PutUint16(r, val)
 
 	return name[:1] + hex.EncodeToString(r)

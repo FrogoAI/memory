@@ -48,6 +48,21 @@ func ExampleCache_Get() {
 	// 0 false
 }
 
+func ExampleCache_Iterator() {
+	cache := lru.NewLRUCache[string](3)
+
+	cache.Put("a", "alpha")
+	cache.Put("b", "beta")
+	cache.Put("c", "gamma")
+
+	for key, val := range cache.Iterator() {
+		fmt.Printf("%s=%s ", key, val)
+	}
+
+	fmt.Println()
+	// Output: c=gamma b=beta a=alpha
+}
+
 func ExampleCache_Clear() {
 	cache := lru.NewLRUCache[string](3)
 

@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -216,8 +217,10 @@ func TestAsyncRegistry(t *testing.T) {
 func TestConcurrentAddGetRemove(t *testing.T) {
 	r := NewRegistry[string, uint64, string]()
 
-	const goroutines = 20
-	const ops = 50
+	const (
+		goroutines = 20
+		ops        = 50
+	)
 
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 3)
@@ -228,7 +231,9 @@ func TestConcurrentAddGetRemove(t *testing.T) {
 
 			for j := range ops {
 				id := uint64(base*ops + j + 1)
-				r.Add(KeyTemporary, id, "value")
+				if err := r.Add(KeyTemporary, id, "value"); err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
 			}
 		}(i)
 	}
@@ -238,7 +243,10 @@ func TestConcurrentAddGetRemove(t *testing.T) {
 			defer wg.Done()
 
 			for j := range ops {
-				r.Get(KeyTemporary, uint64(j+1))
+				if _, err := r.Get(KeyTemporary, uint64(j+1)); err != nil {
+					// Concurrent removes may cause not-found errors; ignore them.
+					_ = err
+				}
 			}
 		}()
 	}
@@ -249,7 +257,10 @@ func TestConcurrentAddGetRemove(t *testing.T) {
 
 			for j := range ops {
 				id := uint64(base*ops + j + 1)
-				r.Remove(KeyTemporary, id)
+				if err := r.Remove(KeyTemporary, id); err != nil {
+					// Concurrent removes may race; ignore not-found errors.
+					_ = err
+				}
 			}
 		}(i)
 	}
@@ -279,6 +290,7 @@ func TestConcurrentGroupCreateDelete(t *testing.T) {
 	for i := range goroutines {
 		go func(i int) {
 			defer wg.Done()
+
 			r.DeleteGroup(i % 5)
 		}(i)
 	}
@@ -286,6 +298,7 @@ func TestConcurrentGroupCreateDelete(t *testing.T) {
 	for i := range goroutines {
 		go func(i int) {
 			defer wg.Done()
+
 			r.GetGroup(i % 5)
 		}(i)
 	}
@@ -296,8 +309,10 @@ func TestConcurrentGroupCreateDelete(t *testing.T) {
 func TestConcurrentIndex(t *testing.T) {
 	r := NewRegistry[string, uint64, any]()
 
-	const goroutines = 20
-	const ops = 50
+	const (
+		goroutines = 20
+		ops        = 50
+	)
 
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 3)
@@ -357,6 +372,7 @@ func TestConcurrentGetKeysAndSize(t *testing.T) {
 	for range goroutines {
 		go func() {
 			defer wg.Done()
+
 			r.GetKeys()
 		}()
 	}
@@ -364,6 +380,7 @@ func TestConcurrentGetKeysAndSize(t *testing.T) {
 	for range goroutines {
 		go func() {
 			defer wg.Done()
+
 			r.Size()
 		}()
 	}
@@ -374,8 +391,10 @@ func TestConcurrentGetKeysAndSize(t *testing.T) {
 func TestConcurrentIDOperations(t *testing.T) {
 	r := NewRegistry[string, uint64, any]()
 
-	const goroutines = 20
-	const ops = 100
+	const (
+		goroutines = 20
+		ops        = 100
+	)
 
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 3)
@@ -435,6 +454,7 @@ func TestConcurrentGetValues(t *testing.T) {
 	for range goroutines {
 		go func() {
 			defer wg.Done()
+
 			r.GetValues(KeyTemporary)
 		}()
 	}
@@ -476,7 +496,11 @@ func TestConcurrentRemoveIDEverywhere(t *testing.T) {
 	for i := range goroutines {
 		go func(i int) {
 			defer wg.Done()
-			r.RemoveIDEverywhere(uint64(i + 1))
+
+			if err := r.RemoveIDEverywhere(uint64(i + 1)); err != nil {
+				// Concurrent removes may race; ignore not-found errors.
+				_ = err
+			}
 		}(i)
 	}
 
@@ -515,6 +539,7 @@ func TestConcurrentClearGroup(t *testing.T) {
 	for range goroutines {
 		go func() {
 			defer wg.Done()
+
 			r.ClearGroup(KeyTemporary)
 		}()
 	}
@@ -544,11 +569,202 @@ func TestConcurrentGetGroups(t *testing.T) {
 	for range goroutines {
 		go func() {
 			defer wg.Done()
+
 			r.GetGroups(0, 1, 2, 3, 4)
 		}()
 	}
 
 	wg.Wait()
+}
+
+type MockConstructError struct{}
+
+func (m *MockConstructError) Construct() error {
+	return errors.New("construct failed")
+}
+
+func TestGetNotFound(t *testing.T) {
+	cases := []struct {
+		name    string
+		key     string
+		id      uint64
+		wantErr error
+	}{
+		{name: "missing item in empty group", key: "empty", id: 999, wantErr: ErrNotFoundEntity},
+		{name: "missing item in populated group", key: "populated", id: 999, wantErr: ErrNotFoundEntity},
+	}
+
+	r := NewRegistry[string, uint64, string]()
+
+	err := r.Add("populated", 1, "exists")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := r.Get(tc.key, tc.id)
+			testutils.Equal(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestConstructError(t *testing.T) {
+	r := NewRegistry[string, uint64, any]()
+
+	err := r.Add(KeyTemporary, 1, &MockConstructError{})
+	if err == nil {
+		t.Fatal("expected construct error, got nil")
+	}
+
+	if err.Error() != "construct failed" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestIteratorSync(t *testing.T) {
+	r := NewRegistry[string, uint64, string]()
+
+	if err := r.Add("g1", 1, "a"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.Add("g1", 2, "b"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.Add("g2", 3, "c"); err != nil {
+		t.Fatal(err)
+	}
+
+	collected := make(map[string]bool)
+	for v := range r.Iterator("g1", "g2") {
+		collected[v] = true
+	}
+
+	if len(collected) != 3 {
+		t.Fatalf("Iterator() yielded %d items, want 3", len(collected))
+	}
+
+	for _, expected := range []string{"a", "b", "c"} {
+		if !collected[expected] {
+			t.Fatalf("Iterator() missing value %q", expected)
+		}
+	}
+}
+
+func TestAsyncIteratorMultiGroup(t *testing.T) {
+	r := NewRegistry[string, uint64, string]()
+
+	if err := r.Add("g1", 1, "a"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.Add("g1", 2, "b"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.Add("g2", 3, "c"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.Add("g3", 4, "d"); err != nil {
+		t.Fatal(err)
+	}
+
+	collected := make(map[string]bool)
+	for v := range r.AsyncIterator("g1", "g2", "g3") {
+		collected[v] = true
+	}
+
+	if len(collected) != 4 {
+		t.Fatalf("AsyncIterator() yielded %d items, want 4", len(collected))
+	}
+
+	for _, expected := range []string{"a", "b", "c", "d"} {
+		if !collected[expected] {
+			t.Fatalf("AsyncIterator() missing value %q", expected)
+		}
+	}
+}
+
+func TestTickGroup(t *testing.T) {
+	r := NewRegistry[string, uint64, any]()
+
+	entities := []*MockEntity{{id: 1}, {id: 2}, {id: 3}}
+	for _, e := range entities {
+		if err := r.Add(KeyTemporary, e.id, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	r.TickGroup(KeyTemporary)
+
+	for _, e := range entities {
+		if e.counter != 1 {
+			t.Fatalf("entity %d: counter = %d, want 1", e.id, e.counter)
+		}
+	}
+}
+
+func TestTickGroups(t *testing.T) {
+	r := NewRegistry[string, uint64, any]()
+
+	e1 := &MockEntity{id: 1}
+	e2 := &MockEntity{id: 2}
+
+	if err := r.Add("g1", e1.id, e1); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.Add("g2", e2.id, e2); err != nil {
+		t.Fatal(err)
+	}
+
+	r.TickGroups("g1", "g2")
+
+	if e1.counter != 1 {
+		t.Fatalf("g1 entity: counter = %d, want 1", e1.counter)
+	}
+
+	if e2.counter != 1 {
+		t.Fatalf("g2 entity: counter = %d, want 1", e2.counter)
+	}
+}
+
+func TestAsyncTickGroups(t *testing.T) {
+	r := NewRegistry[string, uint64, any]()
+
+	e1 := &MockEntity{id: 1}
+	e2 := &MockEntity{id: 2}
+
+	if err := r.Add("g1", e1.id, e1); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.Add("g2", e2.id, e2); err != nil {
+		t.Fatal(err)
+	}
+
+	r.AsyncTick("g1", "g2")
+
+	if e1.counter != 1 {
+		t.Fatalf("g1 entity: counter = %d, want 1", e1.counter)
+	}
+
+	if e2.counter != 1 {
+		t.Fatalf("g2 entity: counter = %d, want 1", e2.counter)
+	}
+}
+
+func TestTickNonTickerEntity(t *testing.T) {
+	r := NewRegistry[string, uint64, any]()
+
+	if err := r.Add(KeyTemporary, 1, "not a ticker"); err != nil {
+		t.Fatal(err)
+	}
+
+	r.TickGroup(KeyTemporary)
 }
 
 /*

@@ -370,3 +370,189 @@ func TestLenAfterEviction(t *testing.T) {
 		})
 	}
 }
+
+func TestCopy(t *testing.T) {
+	cases := []struct {
+		name     string
+		capacity int
+		keys     []string
+		values   []int
+	}{
+		{
+			name:     "empty cache",
+			capacity: 5,
+		},
+		{
+			name:     "single entry",
+			capacity: 5,
+			keys:     []string{"a"},
+			values:   []int{1},
+		},
+		{
+			name:     "multiple entries",
+			capacity: 5,
+			keys:     []string{"a", "b", "c"},
+			values:   []int{1, 2, 3},
+		},
+		{
+			name:     "at capacity",
+			capacity: 2,
+			keys:     []string{"a", "b"},
+			values:   []int{1, 2},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := NewLRUCache[int](tc.capacity)
+
+			for i, k := range tc.keys {
+				c.Put(k, tc.values[i])
+			}
+
+			clone := c.Copy()
+
+			testutils.Equal(t, clone.Len(), c.Len())
+
+			// Verify all entries present in clone
+			for i, k := range tc.keys {
+				val, ok := clone.Get(k)
+				testutils.Equal(t, ok, true)
+				testutils.Equal(t, val, tc.values[i])
+			}
+
+			// Verify independence: add to original, clone unaffected
+			c.Put("new", 99)
+
+			_, ok := clone.Get("new")
+			testutils.Equal(t, ok, false)
+		})
+	}
+}
+
+func TestIterator(t *testing.T) {
+	cases := []struct {
+		name     string
+		capacity int
+		puts     []struct{ key, val string }
+		access   []string // keys to Get (promote) before iterating
+		wantKeys []string // expected keys in MRU-to-LRU order
+	}{
+		{
+			name:     "empty cache",
+			capacity: 5,
+			wantKeys: nil,
+		},
+		{
+			name:     "single entry",
+			capacity: 5,
+			puts:     []struct{ key, val string }{{"a", "alpha"}},
+			wantKeys: []string{"a"},
+		},
+		{
+			name:     "multiple entries MRU to LRU",
+			capacity: 5,
+			puts: []struct{ key, val string }{
+				{"a", "alpha"},
+				{"b", "beta"},
+				{"c", "gamma"},
+			},
+			wantKeys: []string{"c", "b", "a"},
+		},
+		{
+			name:     "order reflects Get promotion",
+			capacity: 5,
+			puts: []struct{ key, val string }{
+				{"a", "alpha"},
+				{"b", "beta"},
+				{"c", "gamma"},
+			},
+			access:   []string{"a"},
+			wantKeys: []string{"a", "c", "b"},
+		},
+		{
+			name:     "after eviction",
+			capacity: 2,
+			puts: []struct{ key, val string }{
+				{"a", "alpha"},
+				{"b", "beta"},
+				{"c", "gamma"}, // evicts "a"
+			},
+			wantKeys: []string{"c", "b"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := NewLRUCache[string](tc.capacity)
+
+			for _, p := range tc.puts {
+				c.Put(p.key, p.val)
+			}
+
+			for _, k := range tc.access {
+				c.Get(k)
+			}
+
+			var gotKeys []string
+
+			var gotVals []string
+
+			for key, val := range c.Iterator() {
+				gotKeys = append(gotKeys, key)
+				gotVals = append(gotVals, val)
+			}
+
+			testutils.Equal(t, len(gotKeys), len(tc.wantKeys))
+
+			for i, wantKey := range tc.wantKeys {
+				testutils.Equal(t, gotKeys[i], wantKey)
+			}
+
+			// Verify values match their keys
+			for i, key := range gotKeys {
+				expected, ok := c.Get(key)
+				testutils.Equal(t, ok, true)
+				testutils.Equal(t, gotVals[i], expected)
+			}
+		})
+	}
+}
+
+func TestIteratorEarlyBreak(t *testing.T) {
+	c := NewLRUCache[int](5)
+
+	for i := range 5 {
+		c.Put(strconv.Itoa(i), i)
+	}
+
+	count := 0
+
+	for range c.Iterator() {
+		count++
+		if count == 2 {
+			break
+		}
+	}
+
+	testutils.Equal(t, count, 2)
+}
+
+func TestCopyEvictionOrder(t *testing.T) {
+	c := NewLRUCache[int](3)
+	c.Put("a", 1)
+	c.Put("b", 2)
+	c.Put("c", 3)
+	c.Get("a") // promote "a" to MRU
+
+	clone := c.Copy()
+
+	// Adding a new entry should evict "b" (LRU) in both original and clone
+	clone.Put("d", 4)
+
+	_, ok := clone.Get("b")
+	testutils.Equal(t, ok, false) // "b" was LRU and should be evicted
+
+	_, ok = clone.Get("a")
+	testutils.Equal(t, ok, true) // "a" was promoted, should survive
+}

@@ -1,3 +1,4 @@
+//nolint:revive // package name is intentional
 package utils
 
 import (
@@ -6,7 +7,12 @@ import (
 	"testing"
 
 	"github.com/FrogoAI/testutils"
+	"github.com/twmb/murmur3"
 )
+
+func murmur3Sum64(data, salt []byte) uint64 {
+	return murmur3.Sum64(append(data, salt...))
+}
 
 const hexConst = 16
 
@@ -354,6 +360,223 @@ func TestBetween(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := Between(test.data, test.keys...)
 			testutils.Equal(t, test.result, result)
+		})
+	}
+}
+
+func TestABTest(t *testing.T) {
+	cases := []struct {
+		name   string
+		data   []byte
+		salt   []byte
+		groups []uint64
+		want   uint64
+	}{
+		{
+			name:   "zero_total_returns_zero",
+			data:   []byte("user1"),
+			salt:   []byte("salt"),
+			groups: []uint64{0, 0},
+			want:   0,
+		},
+		{
+			name:   "empty_groups_returns_zero",
+			data:   []byte("user1"),
+			salt:   []byte("salt"),
+			groups: []uint64{},
+			want:   0,
+		},
+		{
+			name:   "single_group",
+			data:   []byte("user1"),
+			salt:   []byte("salt"),
+			groups: []uint64{100},
+			want:   murmur3Sum64([]byte("user1"), []byte("salt")) % 100,
+		},
+		{
+			name:   "two_groups",
+			data:   []byte("test"),
+			salt:   []byte("s"),
+			groups: []uint64{50, 50},
+			want:   murmur3Sum64([]byte("test"), []byte("s")) % 100,
+		},
+		{
+			name:   "deterministic",
+			data:   []byte("user1"),
+			salt:   []byte("salt"),
+			groups: []uint64{50, 50},
+			want:   ABTest([]byte("user1"), []byte("salt"), 50, 50),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := ABTest(tc.data, tc.salt, tc.groups...)
+			testutils.Equal(t, result, tc.want)
+		})
+	}
+}
+
+func TestEmailUserName(t *testing.T) {
+	cases := []struct {
+		name  string
+		email string
+		want  string
+	}{
+		{name: "valid_email", email: "user@example.com", want: "user"},
+		{name: "no_at_sign", email: "useronly", want: "useronly"},
+		{name: "empty_string", email: "", want: ""},
+		{name: "at_sign_only", email: "@domain.com", want: ""},
+		{name: "multiple_at", email: "user@sub@domain.com", want: "user"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testutils.Equal(t, EmailUserName(tc.email), tc.want)
+		})
+	}
+}
+
+func TestNFDLowerString(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "empty", input: "", want: ""},
+		{name: "already_lower", input: "hello", want: "hello"},
+		{name: "upper_case", input: "HELLO", want: "hello"},
+		{name: "mixed_case", input: "HeLLo WoRLd", want: "hello world"},
+		{name: "leading_trailing_spaces", input: "  hello  ", want: "hello"},
+		{name: "unicode_accented", input: "\u00C9", want: "e\u0301"},
+		{name: "unicode_nfd_decomposition", input: "\u00F1", want: "n\u0303"},
+		{name: "tabs_and_newlines", input: "\t hello \n", want: "hello"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testutils.Equal(t, NFDLowerString(tc.input), tc.want)
+		})
+	}
+}
+
+func TestCommonString(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "empty", input: "", want: ""},
+		{name: "only_letters", input: "hello", want: "hello"},
+		{name: "letters_and_digits", input: "abc123", want: "abc123"},
+		{name: "with_spaces", input: "hello world", want: "hello world"},
+		{name: "strips_punctuation", input: "hello, world!", want: "hello world"},
+		{name: "strips_special_chars", input: "a@b#c$d%e", want: "abcde"},
+		{name: "unicode_letters", input: "café!", want: "café"},
+		{name: "only_special_chars", input: "!@#$%^&*()", want: ""},
+		{name: "mixed_content", input: "user-name_123 (test)", want: "username123 test"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testutils.Equal(t, CommonString(tc.input), tc.want)
+		})
+	}
+}
+
+func TestGetShortID(t *testing.T) {
+	id1, err1 := GetShortID()
+	testutils.Equal(t, err1, nil)
+
+	id2, err2 := GetShortID()
+	testutils.Equal(t, err2, nil)
+
+	// IDs should be non-empty
+	testutils.NotEqual(t, len(id1), 0)
+	testutils.NotEqual(t, len(id2), 0)
+
+	// hex-encoded 6 bytes = 12 characters
+	testutils.Equal(t, len(id1), 12)
+	testutils.Equal(t, len(id2), 12)
+}
+
+func TestSafeGet(t *testing.T) {
+	cases := []struct {
+		name         string
+		ptr          *int
+		defaultValue int
+		want         int
+	}{
+		{name: "nil_returns_default", ptr: nil, defaultValue: 42, want: 42},
+		{name: "non_nil_returns_value", ptr: intPtr(99), defaultValue: 42, want: 99},
+		{name: "zero_value_ptr", ptr: intPtr(0), defaultValue: 42, want: 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testutils.Equal(t, SafeGet(tc.ptr, tc.defaultValue), tc.want)
+		})
+	}
+}
+
+func intPtr(v int) *int { return &v }
+
+func TestSafeGetString(t *testing.T) {
+	var nilStr *string
+
+	testutils.Equal(t, SafeGet(nilStr, "default"), "default")
+
+	val := "hello"
+	testutils.Equal(t, SafeGet(&val, "default"), "hello")
+}
+
+func TestRandStringBytesExtended(t *testing.T) {
+	cases := []struct {
+		name string
+		n    int
+		want int
+	}{
+		{name: "zero_length", n: 0, want: 0},
+		{name: "negative_length", n: -1, want: 0},
+		{name: "one", n: 1, want: 1},
+		{name: "ten", n: 10, want: 10},
+		{name: "hundred", n: 100, want: 100},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := RandStringBytes(tc.n)
+			testutils.Equal(t, len(result), tc.want)
+
+			// verify all characters are lowercase letters
+			for _, c := range result {
+				if c < 'a' || c > 'z' {
+					t.Fatalf("unexpected character: %c", c)
+				}
+			}
+		})
+	}
+}
+
+func TestSplitByChunksExtended(t *testing.T) {
+	cases := []struct {
+		name      string
+		input     string
+		chunkSize int
+		want      []string
+	}{
+		{name: "empty_string", input: "", chunkSize: 3, want: nil},
+		{name: "chunk_size_zero", input: "abc", chunkSize: 0, want: nil},
+		{name: "chunk_size_negative", input: "abc", chunkSize: -1, want: nil},
+		{name: "exact_fit", input: "abcdef", chunkSize: 3, want: []string{"abc", "def"}},
+		{name: "remainder", input: "abcdefg", chunkSize: 3, want: []string{"abc", "def", "g"}},
+		{name: "chunk_larger_than_input", input: "ab", chunkSize: 10, want: []string{"ab"}},
+		{name: "single_char_chunks", input: "abc", chunkSize: 1, want: []string{"a", "b", "c"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testutils.Equal(t, SplitByChunks(tc.input, tc.chunkSize), tc.want)
 		})
 	}
 }

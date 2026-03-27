@@ -1,3 +1,4 @@
+//nolint:revive // package name is intentional
 package utils
 
 import (
@@ -84,7 +85,7 @@ func TestSortStructs(t *testing.T) {
 func TestSortRandom(t *testing.T) {
 	ints := []interface{}{}
 	for i := 0; i < 10000; i++ {
-		ints = append(ints, rand.Int()) //nolint:gosec
+		ints = append(ints, rand.Int())
 	}
 
 	if err := Sort(ints, comparator.IntComparator); err != nil {
@@ -103,7 +104,7 @@ func BenchmarkGoSortRandom(b *testing.B) {
 
 	ints := []interface{}{}
 	for i := 0; i < 100000; i++ {
-		ints = append(ints, rand.Int()) //nolint:gosec
+		ints = append(ints, rand.Int())
 	}
 
 	b.StartTimer()

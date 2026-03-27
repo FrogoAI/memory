@@ -2,11 +2,13 @@ package sortedset
 
 import "encoding/json"
 
+// Dump represents a JSON-serializable snapshot of a SortedSet.
 type Dump struct {
 	Data    map[string]interface{}
 	KeyType string
 }
 
+// Dump serializes the sorted set to a JSON string using the provided conversion function.
 func (s *SortedSet[K, V]) Dump(makeDump func(key K, value V) (string, string, error)) (string, error) {
 	data := map[string][]string{}
 
@@ -24,6 +26,7 @@ func (s *SortedSet[K, V]) Dump(makeDump func(key K, value V) (string, string, er
 	return string(dump), err
 }
 
+// Restore populates the sorted set from a JSON dump string using the provided conversion function.
 func (s *SortedSet[K, V]) Restore(keyRestore func(key string, values []string) (K, []V, error), dump string) error {
 	var data map[string][]string
 

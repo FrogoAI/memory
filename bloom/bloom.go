@@ -5,6 +5,7 @@
 package bloom
 
 import (
+	"encoding"
 	"encoding/binary"
 	"fmt"
 	"hash"
@@ -14,6 +15,19 @@ import (
 	"github.com/FrogoAI/packer"
 )
 
+// Compile-time interface checks.
+var (
+	_ encoding.BinaryMarshaler   = (*CountingFilter)(nil)
+	_ encoding.BinaryUnmarshaler = (*CountingFilter)(nil)
+)
+
+const (
+	wordAlignPadding = 31 // bitsPerWord(32) - 1, for rounding up to 32-bit boundary
+	wordAlignShift   = 5  // log2(bitsPerWord), for dividing by 32
+)
+
+var ln2 = math.Log(2) //nolint:gochecknoglobals,mnd // precomputed ln(2) mathematical constant
+
 type filter struct {
 	m uint32
 	k uint32
@@ -22,7 +36,11 @@ type filter struct {
 
 func (f *filter) bits(data []byte) []uint32 {
 	f.h.Reset()
-	f.h.Write(data)
+
+	if _, err := f.h.Write(data); err != nil {
+		return nil
+	}
+
 	d := f.h.Sum(nil)
 	a := binary.BigEndian.Uint32(d[4:8])
 	b := binary.BigEndian.Uint32(d[0:4])
@@ -45,11 +63,10 @@ func newFilter(m, k uint32) *filter {
 
 func estimates(n uint32, p float64) (uint32, uint32, error) {
 	nf := float64(n)
-	log2 := math.Log(2) // nolint:mnd
-	m := -1 * nf * math.Log(p) / (log2 * log2)
-	k := math.Ceil(log2 * m / nf)
+	m := -1 * nf * math.Log(p) / (ln2 * ln2)
+	k := math.Ceil(ln2 * m / nf)
 
-	words := m + 31>>5 // nolint:mnd
+	words := m + wordAlignPadding>>wordAlignShift
 	if words >= math.MaxInt32 || m > math.MaxUint32 {
 		return 0, 0, fmt.Errorf("%w: n=%d p=%f requires %.0f bits", ErrBitsetTooBig, n, p, m)
 	}
@@ -67,6 +84,7 @@ type CountingFilter struct {
 // NewCounting creates an optimized counting bloom filter.
 // It returns ErrBitsetTooBig when n and p require more bits than a 32-bit filter supports.
 func NewCounting(n int, p float64) (*CountingFilter, error) {
+	//nolint:gosec // n is validated by estimates(); negative n wraps to large uint32 and is caught
 	m, k, err := estimates(uint32(n), p)
 	if err != nil {
 		return nil, err
@@ -95,7 +113,7 @@ func (f *CountingFilter) Test(data []byte) bool {
 func (f *CountingFilter) Add(data []byte) {
 	for _, i := range f.bits(data) {
 		// Prevent overflow
-		if f.counters[i] < 255 { // nolint:mnd
+		if f.counters[i] < math.MaxUint8 {
 			f.counters[i]++
 		}
 	}
@@ -109,6 +127,17 @@ func (f *CountingFilter) Remove(data []byte) {
 		if f.counters[i] > 0 {
 			f.counters[i]--
 		}
+	}
+}
+
+// Copy returns a deep copy of the CountingFilter.
+func (f *CountingFilter) Copy() *CountingFilter {
+	counters := make([]byte, len(f.counters))
+	copy(counters, f.counters)
+
+	return &CountingFilter{
+		filter:   newFilter(f.m, f.k),
+		counters: counters,
 	}
 }
 
@@ -139,6 +168,23 @@ func (f *CountingFilter) ToBytes() ([]byte, error) {
 	}
 
 	return enc.Bytes(), nil
+}
+
+// MarshalBinary implements the encoding.BinaryMarshaler interface.
+func (f *CountingFilter) MarshalBinary() ([]byte, error) {
+	return f.ToBytes()
+}
+
+// UnmarshalBinary implements the encoding.BinaryUnmarshaler interface.
+func (f *CountingFilter) UnmarshalBinary(data []byte) error {
+	restored, err := NewCountingFromBytes(data)
+	if err != nil {
+		return err
+	}
+
+	*f = *restored
+
+	return nil
 }
 
 // NewCountingFromBytes deserializes a byte slice into a CountingFilter.

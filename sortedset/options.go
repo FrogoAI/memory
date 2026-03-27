@@ -1,5 +1,6 @@
 package sortedset
 
+// GetByKeyRangeOptions configures the behavior of GetByKeyRange queries.
 type GetByKeyRangeOptions struct {
 	Limit        int  // limit the max nodes to return
 	ExcludeStart bool // exclude start value, so it search in interval (start, end] or (start, end)

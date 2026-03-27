@@ -14,8 +14,10 @@ const (
 	skipListMaxLevel = 32
 	skipListP        = 0.25
 	maxLimit         = 2147483648
+	probabilityMask  = 0xFFFF // 16-bit bitmask for skip list level probability
 )
 
+// SortedSet is a skip-list-backed sorted set with O(log N) insert, delete, and lookup.
 type SortedSet[K comparable, V comparable] struct {
 	emptyKey   K
 	header     *Node[K, V]
@@ -52,7 +54,8 @@ func (s *SortedSet[K, V]) createNode(level int, key K, value V) *Node[K, V] {
 // levels are less likely to be returned.
 func (s *SortedSet[K, V]) randomLevel() int {
 	level := 1
-	for float64(rand.Int31()&0xFFFF) < float64(skipListP*0xFFFF) { //nolint:gosec,mnd
+	//nolint:gosec // math/rand is intentional for skip list leveling
+	for float64(rand.Int31()&probabilityMask) < float64(skipListP*probabilityMask) {
 		level++
 	}
 
@@ -83,6 +86,7 @@ func (s *SortedSet[K, V]) insertNode(key K, value V) *Node[K, V] {
 			(s.compare(x.level[i].forward.key, key) < 0 ||
 				(s.compare(x.level[i].forward.key, key) == 0 && // key is the same but the key is different
 					x.level[i].forward.value != value)) {
+			//nolint:gosec // i is bounded by s.level which never exceeds skipListMaxLevel
 			rank[i] += x.level[i].span
 			x = x.level[i].forward
 		}
@@ -185,6 +189,7 @@ func (s *SortedSet[K, V]) delete(key K, value V) bool {
 	return false /* not found */
 }
 
+// NewSortedSet creates a new empty sorted set using the given comparator for key ordering.
 func NewSortedSet[K comparable, V comparable](c comparator.Comparator) *SortedSet[K, V] {
 	var (
 		emptyKey   K
@@ -204,14 +209,12 @@ func NewSortedSet[K comparable, V comparable](c comparator.Comparator) *SortedSe
 
 // Len returns the number of elements in the sorted set.
 func (s *SortedSet[K, V]) Len() int {
-
-	return int(s.length)
+	return int(s.length) //nolint:gosec // length is bounded by available memory; overflow beyond MaxInt is not practical
 }
 
 // PeekMin get the element with minimum key, nil if the set is empty
 // Time complexity of this method is : O(log(N))
 func (s *SortedSet[K, V]) PeekMin() *Node[K, V] {
-
 	f := s.header.level[0].forward
 
 	return f
@@ -220,7 +223,6 @@ func (s *SortedSet[K, V]) PeekMin() *Node[K, V] {
 // PopMin get and remove the element with minimal key, nil if the set is empty
 // Time complexity of this method is : O(log(N))
 func (s *SortedSet[K, V]) PopMin() *Node[K, V] {
-
 	x := s.header.level[0].forward
 	if x != nil {
 		s.Remove(x.value)
@@ -232,7 +234,6 @@ func (s *SortedSet[K, V]) PopMin() *Node[K, V] {
 // PeekMax get the element with maximum key, nil if the set is empty
 // Time Complexity : O(1)
 func (s *SortedSet[K, V]) PeekMax() *Node[K, V] {
-
 	t := s.tail
 
 	return t
@@ -241,7 +242,6 @@ func (s *SortedSet[K, V]) PeekMax() *Node[K, V] {
 // PopMax get and remove the element with maximum key, nil if the set is empty
 // Time complexity of this method is : O(log(N))
 func (s *SortedSet[K, V]) PopMax() *Node[K, V] {
-
 	x := s.tail
 	if x != nil {
 		s.Remove(x.value)
@@ -255,7 +255,6 @@ func (s *SortedSet[K, V]) PopMax() *Node[K, V] {
 // Time complexity of this method is : O(log(N))
 func (s *SortedSet[K, V]) Upsert(key K, value V) bool {
 	var newNode *Node[K, V]
-
 
 	found := s.dict[value]
 	if found != nil {
@@ -280,7 +279,6 @@ func (s *SortedSet[K, V]) Upsert(key K, value V) bool {
 // Remove delete element specified by key
 // Time complexity of this method is : O(log(N))
 func (s *SortedSet[K, V]) Remove(value V) *Node[K, V] {
-
 	found := s.dict[value]
 	if found != nil {
 		s.delete(found.key, found.value)
@@ -314,12 +312,83 @@ func (s *SortedSet[K, V]) GetUntilKey(untilKey K, remove bool) []any {
 	return data
 }
 
+// seekPosition traverses skip list levels to find the rightmost node
+// whose key is less than (or equal to, if inclusive) the given boundary.
+func (s *SortedSet[K, V]) seekPosition(boundary K, inclusive bool) *Node[K, V] {
+	x := s.header
+
+	for i := s.level - 1; i >= 0; i-- {
+		for x.level[i].forward != nil {
+			cmp := s.compare(x.level[i].forward.key, boundary)
+			if cmp > 0 || (cmp == 0 && !inclusive) {
+				break
+			}
+
+			x = x.level[i].forward
+		}
+	}
+
+	return x
+}
+
+// collectForward gathers nodes walking forward from x while keys remain
+// within the upper bound. excludeEnd controls whether the end boundary
+// is exclusive.
+func (s *SortedSet[K, V]) collectForward(x *Node[K, V], end K, excludeEnd bool, limit int, remove bool) []*Node[K, V] {
+	var nodes []*Node[K, V]
+
+	for x != nil && limit > 0 {
+		cmp := s.compare(x.key, end)
+		if cmp > 0 || (cmp == 0 && excludeEnd) {
+			break
+		}
+
+		next := x.level[0].forward
+		nodes = append(nodes, x)
+
+		if remove {
+			s.delete(x.Key(), x.Value())
+		}
+
+		limit--
+		x = next
+	}
+
+	return nodes
+}
+
+// collectReverse gathers nodes walking backward from x while keys remain
+// within the lower bound. excludeStart controls whether the start boundary
+// is exclusive.
+func (s *SortedSet[K, V]) collectReverse(
+	x *Node[K, V], start K, excludeStart bool, limit int, remove bool,
+) []*Node[K, V] {
+	var nodes []*Node[K, V]
+
+	for x != nil && limit > 0 {
+		cmp := s.compare(x.key, start)
+		if cmp < 0 || (cmp == 0 && excludeStart) {
+			break
+		}
+
+		next := x.backward
+		nodes = append(nodes, x)
+
+		if remove {
+			s.delete(x.Key(), x.Value())
+		}
+
+		limit--
+		x = next
+	}
+
+	return nodes
+}
+
 // GetByKeyRange get the nodes whose key within the specific range
 // If options is nil, it `searches` in interval [start, end] without any limit by default
 // Time complexity of this method is : O(log(N))
-func (s *SortedSet[K, V]) GetByKeyRange(start K, end K, options *GetByKeyRangeOptions) []*Node[K, V] { //nolint:gocyclo
-
-	// prepare parameters
+func (s *SortedSet[K, V]) GetByKeyRange(start K, end K, options *GetByKeyRangeOptions) []*Node[K, V] {
 	limit := maxLimit
 	if options != nil && options.Limit > 0 {
 		limit = options.Limit
@@ -339,100 +408,19 @@ func (s *SortedSet[K, V]) GetByKeyRange(start K, end K, options *GetByKeyRangeOp
 		excludeStart, excludeEnd = excludeEnd, excludeStart
 	}
 
-	var nodes []*Node[K, V]
-
-	// determine if out of range
 	if s.length == 0 {
-		return nodes
+		return nil
 	}
 
-	if reverse { // search from end to start
-		x := s.header
+	if reverse {
+		x := s.seekPosition(end, !excludeEnd)
 
-		if excludeEnd {
-			for i := s.level - 1; i >= 0; i-- {
-				for x.level[i].forward != nil &&
-					s.compare(x.level[i].forward.key, end) < 0 {
-					x = x.level[i].forward
-				}
-			}
-		} else {
-			for i := s.level - 1; i >= 0; i-- {
-				for x.level[i].forward != nil &&
-					s.compare(x.level[i].forward.key, end) <= 0 {
-					x = x.level[i].forward
-				}
-			}
-		}
-
-		for x != nil && limit > 0 {
-			if excludeStart {
-				if s.compare(x.key, start) <= 0 {
-					break
-				}
-			} else {
-				if s.compare(x.key, start) < 0 {
-					break
-				}
-			}
-
-			next := x.backward
-			nodes = append(nodes, x)
-
-			if remove {
-				s.delete(x.Key(), x.Value())
-			}
-
-			limit--
-			x = next
-		}
-	} else {
-		// search from start to end
-		x := s.header
-
-		if excludeStart {
-			for i := s.level - 1; i >= 0; i-- {
-				for x.level[i].forward != nil &&
-					s.compare(x.level[i].forward.key, start) <= 0 {
-					x = x.level[i].forward
-				}
-			}
-		} else {
-			for i := s.level - 1; i >= 0; i-- {
-				for x.level[i].forward != nil &&
-					s.compare(x.level[i].forward.key, start) < 0 {
-					x = x.level[i].forward
-				}
-			}
-		}
-
-		/* Current node is the last with key < or <= start. */
-		x = x.level[0].forward
-
-		for x != nil && limit > 0 {
-			if excludeEnd {
-				if s.compare(x.key, end) >= 0 {
-					break
-				}
-			} else {
-				if s.compare(x.key, end) > 0 {
-					break
-				}
-			}
-
-			next := x.level[0].forward
-			nodes = append(nodes, x)
-
-			if remove {
-				s.delete(x.Key(), x.Value())
-			}
-
-			limit--
-			x = next
-		}
+		return s.collectReverse(x, start, excludeStart, limit, remove)
 	}
 
-	return nodes
+	x := s.seekPosition(start, excludeStart)
+
+	return s.collectForward(x.level[0].forward, end, excludeEnd, limit, remove)
 }
 
 // GetByRankRange get nodes within specific rank range [start, end]
@@ -441,14 +429,13 @@ func (s *SortedSet[K, V]) GetByKeyRange(start K, end K, options *GetByKeyRangeOp
 // If remove is true, the returned nodes are removed
 // Time complexity of this method is : O(log(N))
 func (s *SortedSet[K, V]) GetByRankRange(start int, end int, remove bool) []*Node[K, V] {
-
 	/* Sanitize indexes. */
 	if start < 0 {
-		start = int(s.length) + start + 1
+		start = int(s.length) + start + 1 //nolint:gosec // length is bounded by available memory
 	}
 
 	if end < 0 {
-		end = int(s.length) + end + 1
+		end = int(s.length) + end + 1 //nolint:gosec // length is bounded by available memory
 	}
 
 	if start <= 0 {
@@ -475,8 +462,8 @@ func (s *SortedSet[K, V]) GetByRankRange(start int, end int, remove bool) []*Nod
 
 	for i := s.level - 1; i >= 0; i-- {
 		for x.level[i].forward != nil &&
-			traversed+int(x.level[i].span) < start {
-			traversed += int(x.level[i].span)
+			traversed+int(x.level[i].span) < start { //nolint:gosec // span is bounded by set length
+			traversed += int(x.level[i].span) //nolint:gosec // span is bounded by set length
 			x = x.level[i].forward
 		}
 
@@ -529,14 +516,27 @@ func (s *SortedSet[K, V]) GetByRank(rank int, remove bool) *Node[K, V] {
 // If node is not found, nil is returned
 // Time complexity : O(1)
 func (s *SortedSet[K, V]) GetByValue(value V) *Node[K, V] {
-
 	n := s.dict[value]
 
 	return n
 }
 
+// Contains reports whether the given value exists in the sorted set.
 func (s *SortedSet[K, V]) Contains(value V) bool {
 	return s.GetByValue(value) != nil
+}
+
+// Copy returns a deep copy of the sorted set. The new set has independent
+// storage but shares the same key and value references. Element order and
+// scores are preserved.
+func (s *SortedSet[K, V]) Copy() *SortedSet[K, V] {
+	clone := NewSortedSet[K, V](s.comparator)
+
+	for x := s.header.level[0].forward; x != nil; x = x.level[0].forward {
+		clone.Upsert(x.key, x.value)
+	}
+
+	return clone
 }
 
 // FindRank find the rank of the node specified by key
@@ -544,7 +544,6 @@ func (s *SortedSet[K, V]) Contains(value V) bool {
 // If the node is not found, 0 is returned. Otherwise rank(> 0) is returned
 // Time complexity of this method is : O(log(N))
 func (s *SortedSet[K, V]) FindRank(value V) int {
-
 	rank := 0
 	node := s.dict[value]
 
@@ -555,11 +554,12 @@ func (s *SortedSet[K, V]) FindRank(value V) int {
 				(s.compare(x.level[i].forward.key, node.key) < 0 ||
 					(s.compare(x.level[i].forward.key, node.key) == 0 &&
 						x.level[i].forward.value != node.value)) {
-				rank += int(x.level[i].span)
+				rank += int(x.level[i].span) //nolint:gosec // span is bounded by set length
 				x = x.level[i].forward
 			}
 
-			if x.value == value {
+			if x.level[i].forward == node {
+				rank += int(x.level[i].span) //nolint:gosec // span is bounded by set length
 				return rank
 			}
 		}

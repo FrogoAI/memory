@@ -14,18 +14,22 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
+// NoopTransformer returns a no-op transformer that passes strings through unchanged.
 func NoopTransformer() transform.Transformer {
 	return transform.Nop
 }
 
+// NoldTransformer returns a transformer that folds Unicode characters to lowercase.
 func NoldTransformer() transform.Transformer {
 	return unicodeFoldTransformer{}
 }
 
+// NormalizeTransformer returns a transformer that applies Unicode NFD normalization and removes combining marks.
 func NormalizeTransformer() transform.Transformer {
 	return transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
 }
 
+// NormalizedFoldTransformer returns a transformer that normalizes Unicode and folds to lowercase.
 func NormalizedFoldTransformer() transform.Transformer {
 	return transform.Chain(NormalizeTransformer(), NoldTransformer())
 }
@@ -210,6 +214,7 @@ func rankFind(source string, targets []string, transformer transform.Transformer
 	return r
 }
 
+// Rank holds the result of a fuzzy match, including the Levenshtein distance and original index.
 type Rank struct {
 	// Source is used as the source for matching.
 	Source string
@@ -224,20 +229,25 @@ type Rank struct {
 	OriginalIndex int
 }
 
+// Ranks is a sortable slice of Rank results ordered by Distance.
 type Ranks []Rank
 
+// Len returns the number of ranks.
 func (r Ranks) Len() int {
 	return len(r)
 }
 
+// Swap swaps the elements at indices i and j.
 func (r Ranks) Swap(i, j int) {
 	r[i], r[j] = r[j], r[i]
 }
 
+// Less reports whether the rank at index i has a smaller distance than at index j.
 func (r Ranks) Less(i, j int) bool {
 	return r[i].Distance < r[j].Distance
 }
 
+// StringTransform applies the given text transformer to s, returning the original on error.
 func StringTransform(s string, t transform.Transformer) (transformed string) {
 	var err error
 

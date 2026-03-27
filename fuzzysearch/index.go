@@ -29,6 +29,7 @@ func NewDocument(id int, text string) Document {
 	}
 }
 
+// Terms returns the analyzed tokens extracted from the document text.
 func (d Document) Terms() []string {
 	return Analyze(d.Text)
 }

@@ -455,3 +455,46 @@ func TestStringStack(t *testing.T) {
 	testutils.Equal(t, s.Pop(), "hello")
 	testutils.Equal(t, s.Pop(), "")
 }
+
+func TestCopy(t *testing.T) {
+	cases := []struct {
+		name   string
+		values []int
+		want   []int
+	}{
+		{
+			name:   "empty stack",
+			values: nil,
+			want:   []int{},
+		},
+		{
+			name:   "single element",
+			values: []int{1},
+			want:   []int{1},
+		},
+		{
+			name:   "multiple elements",
+			values: []int{1, 2, 3, 4, 5},
+			want:   []int{1, 2, 3, 4, 5},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var s Stack[int]
+			for _, v := range tc.values {
+				s.Push(v)
+			}
+
+			clone := s.Copy()
+
+			testutils.Equal(t, clone.Len(), s.Len())
+			testutils.Equal(t, clone.ToSlice(), tc.want)
+
+			// Verify independence: modify original, clone unaffected
+			s.Push(99)
+			testutils.NotEqual(t, clone.Len(), s.Len())
+			testutils.Equal(t, clone.ToSlice(), tc.want)
+		})
+	}
+}

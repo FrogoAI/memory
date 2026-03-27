@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 )
 
+// GetBytes encodes the given value into a byte slice using gob encoding.
 func GetBytes(key interface{}) ([]byte, error) {
 	var buf bytes.Buffer
 

@@ -7,8 +7,8 @@ package linkedlist
 // The zero value for List is an empty list ready to use.
 type List[V any] struct {
 	index map[string]*Element[V] // hash-map to search Element by ID
-	root Element[V] // sentinel list element, only &root, root.prev, and root.next are used
-	len  int // current list length excluding (this) sentinel element
+	root  Element[V]             // sentinel list element, only &root, root.prev, and root.next are used
+	len   int                    // current list length excluding (this) sentinel element
 }
 
 func (l *List[V]) init() {
@@ -21,7 +21,6 @@ func (l *List[V]) init() {
 
 // Init initializes or clears the list and returns it.
 func (l *List[V]) Init() *List[V] {
-
 	l.init()
 
 	return l
@@ -33,7 +32,6 @@ func New[V any]() *List[V] { return new(List[V]).Init() }
 // Len returns the number of elements of list l.
 // The complexity is O(1).
 func (l *List[V]) Len() int {
-
 	return l.len
 }
 
@@ -47,7 +45,6 @@ func (l *List[V]) front() *Element[V] {
 
 // Front returns the first element of the list, or nil if the list is empty.
 func (l *List[V]) Front() *Element[V] {
-
 	return l.front()
 }
 
@@ -61,7 +58,6 @@ func (l *List[V]) back() *Element[V] {
 
 // Back returns the last element of the list, or nil if the list is empty.
 func (l *List[V]) Back() *Element[V] {
-
 	return l.back()
 }
 
@@ -129,7 +125,6 @@ func (l *List[V]) move(e, at *Element[V]) {
 
 // Remove removes e from l if e belongs to the list, and returns its value.
 func (l *List[V]) Remove(e *Element[V]) V {
-
 	if e.list == l {
 		// if e.list == l, l must have been initialized when e was inserted
 		// in l or l == nil (e is a zero Element) and l.remove will crash
@@ -141,7 +136,6 @@ func (l *List[V]) Remove(e *Element[V]) V {
 
 // PushFront inserts a new element with value v at the front of the list and returns it.
 func (l *List[V]) PushFront(v V) *Element[V] {
-
 	l.lazyInit()
 
 	return l.insertValue(v, &l.root)
@@ -149,7 +143,6 @@ func (l *List[V]) PushFront(v V) *Element[V] {
 
 // PushBack inserts a new element with value v at the back of the list and returns it.
 func (l *List[V]) PushBack(v V) *Element[V] {
-
 	l.lazyInit()
 
 	return l.insertValue(v, l.root.prev)
@@ -158,7 +151,6 @@ func (l *List[V]) PushBack(v V) *Element[V] {
 // InsertBefore inserts a new element with value v immediately before mark and returns it.
 // If mark does not belong to l, the list is not modified and nil is returned.
 func (l *List[V]) InsertBefore(v V, mark *Element[V]) *Element[V] {
-
 	if mark.list != l {
 		return nil
 	}
@@ -169,7 +161,6 @@ func (l *List[V]) InsertBefore(v V, mark *Element[V]) *Element[V] {
 // InsertAfter inserts a new element with value v immediately after mark and returns it.
 // If mark does not belong to l, the list is not modified and nil is returned.
 func (l *List[V]) InsertAfter(v V, mark *Element[V]) *Element[V] {
-
 	if mark.list != l {
 		return nil
 	}
@@ -179,7 +170,6 @@ func (l *List[V]) InsertAfter(v V, mark *Element[V]) *Element[V] {
 
 // MoveToFront moves element e to the front of list l.
 func (l *List[V]) MoveToFront(e *Element[V]) {
-
 	if e.list != l || l.root.next == e {
 		return
 	}
@@ -189,7 +179,6 @@ func (l *List[V]) MoveToFront(e *Element[V]) {
 
 // MoveToBack moves element e to the back of list l.
 func (l *List[V]) MoveToBack(e *Element[V]) {
-
 	if e.list != l || l.root.prev == e {
 		return
 	}
@@ -199,7 +188,6 @@ func (l *List[V]) MoveToBack(e *Element[V]) {
 
 // MoveBefore moves element e to its new position before mark.
 func (l *List[V]) MoveBefore(e, mark *Element[V]) {
-
 	if e.list != l || e == mark || mark.list != l {
 		return
 	}
@@ -209,7 +197,6 @@ func (l *List[V]) MoveBefore(e, mark *Element[V]) {
 
 // MoveAfter moves element e to its new position after mark.
 func (l *List[V]) MoveAfter(e, mark *Element[V]) {
-
 	if e.list != l || e == mark || mark.list != l {
 		return
 	}
@@ -239,13 +226,11 @@ func (l *List[V]) PushFrontList(other *List[V]) {
 
 // ByID returns the element with the given ID, or nil if not found.
 func (l *List[V]) ByID(id string) *Element[V] {
-
 	return l.index[id]
 }
 
 // List returns all element values in front-to-back order as a slice.
 func (l *List[V]) List() (result []V) {
-
 	e := l.back()
 	for e != nil && e != &l.root {
 		result = append(result, e.Value)
@@ -257,7 +242,6 @@ func (l *List[V]) List() (result []V) {
 
 // Append pushes one or more values to the back of the list.
 func (l *List[V]) Append(elements ...V) {
-
 	l.lazyInit()
 
 	for _, v := range elements {
@@ -265,9 +249,20 @@ func (l *List[V]) Append(elements ...V) {
 	}
 }
 
+// Copy returns a deep copy of the list. The new list has independent elements
+// but shares the same value references. Element order is preserved.
+func (l *List[V]) Copy() *List[V] {
+	clone := New[V]()
+
+	for e := l.front(); e != nil && e != &l.root; e = e.next {
+		clone.PushBack(e.Value)
+	}
+
+	return clone
+}
+
 // Clear removes all elements from the list.
 func (l *List[V]) Clear() {
-
 	l.init()
 }
 

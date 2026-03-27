@@ -423,6 +423,167 @@ func BenchmarkRankFind(b *testing.B) {
 	})
 }
 
+func TestRankMatchFold(t *testing.T) {
+	cases := []struct {
+		name   string
+		source string
+		target string
+		rank   int
+	}{
+		{"exact case-insensitive", "hello", "HELLO", 0},
+		{"substring fold", "whl", "CARTWHEEL", 6},
+		{"no match", "xyz", "CARTWHEEL", -1},
+		{"source longer than target", "longword", "hi", -1},
+		{"unicode fold", "ёлка", "ЁЛОЧКА", 2},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := RankMatchFold(tc.source, tc.target)
+			if got != tc.rank {
+				t.Errorf("RankMatchFold(%q, %q) = %d, want %d", tc.source, tc.target, got, tc.rank)
+			}
+		})
+	}
+}
+
+func TestRankFindWithTies(t *testing.T) {
+	// "ab" matches "abc" and "abd" — both have the same Levenshtein distance
+	targets := []string{"abc", "abd", "xyz", "abef"}
+	ranks := RankFind("ab", targets)
+
+	if len(ranks) != 3 {
+		t.Fatalf("expected 3 matches, got %d: %+v", len(ranks), ranks)
+	}
+
+	// First two should have same distance (1), third should have distance 2
+	testutils.Equal(t, ranks[0].Distance, ranks[1].Distance)
+
+	if ranks[2].Distance <= ranks[0].Distance {
+		t.Errorf("expected third rank distance > first, got %d <= %d", ranks[2].Distance, ranks[0].Distance)
+	}
+
+	// Verify OriginalIndex is preserved
+	testutils.Equal(t, ranks[0].OriginalIndex, 0)
+	testutils.Equal(t, ranks[1].OriginalIndex, 1)
+	testutils.Equal(t, ranks[2].OriginalIndex, 3)
+}
+
+func TestEmptyInput(t *testing.T) {
+	t.Run("Match", func(t *testing.T) {
+		cases := []struct {
+			name   string
+			source string
+			target string
+			want   bool
+		}{
+			{"empty source empty target", "", "", true},
+			{"empty source non-empty target", "", "hello", true},
+			{"non-empty source empty target", "hello", "", false},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				testutils.Equal(t, Match(tc.source, tc.target), tc.want)
+			})
+		}
+	})
+
+	t.Run("MatchNormalized", func(t *testing.T) {
+		testutils.Equal(t, MatchNormalized("", "café"), true)
+		testutils.Equal(t, MatchNormalized("café", ""), false)
+		testutils.Equal(t, MatchNormalized("", ""), true)
+	})
+
+	t.Run("MatchNormalizedFold", func(t *testing.T) {
+		testutils.Equal(t, MatchNormalizedFold("", "CAFÉ"), true)
+		testutils.Equal(t, MatchNormalizedFold("CAFÉ", ""), false)
+	})
+
+	t.Run("Find empty source", func(t *testing.T) {
+		targets := []string{"a", "b", "c"}
+		// Empty source matches everything
+		matches := Find("", targets)
+		testutils.Equal(t, len(matches), 3)
+	})
+
+	t.Run("Find empty targets", func(t *testing.T) {
+		matches := Find("abc", []string{})
+		testutils.Equal(t, len(matches), 0)
+	})
+
+	t.Run("Find nil targets", func(t *testing.T) {
+		matches := Find("abc", nil)
+		testutils.Equal(t, len(matches), 0)
+	})
+
+	t.Run("RankMatch empty source", func(t *testing.T) {
+		rank := RankMatch("", "hello")
+		if rank < 0 {
+			t.Errorf("expected non-negative rank for empty source, got %d", rank)
+		}
+	})
+
+	t.Run("RankMatch empty target", func(t *testing.T) {
+		rank := RankMatch("hello", "")
+		testutils.Equal(t, rank, -1)
+	})
+
+	t.Run("RankMatch both empty", func(t *testing.T) {
+		testutils.Equal(t, RankMatch("", ""), 0)
+	})
+
+	t.Run("RankFind empty source", func(t *testing.T) {
+		targets := []string{"a", "bb", "ccc"}
+		ranks := RankFind("", targets)
+		// Empty source matches all targets
+		testutils.Equal(t, len(ranks), 3)
+	})
+
+	t.Run("RankFind empty targets", func(t *testing.T) {
+		ranks := RankFind("abc", []string{})
+		testutils.Equal(t, len(ranks), 0)
+	})
+}
+
+func TestUnicodeEdgeCases(t *testing.T) {
+	cases := []struct {
+		name   string
+		source string
+		target string
+		match  bool
+	}{
+		{"combining characters normalized", "café", "cafe\u0301", true},
+		{"hangul syllable", "한", "한국어", true},
+		{"emoji no match", "🎉", "party", false},
+		{"mixed script", "abc", "aбc", false},
+		{"zero-width joiner", "ab", "a\u200Db", true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := MatchNormalized(tc.source, tc.target)
+			if got != tc.match {
+				t.Errorf("MatchNormalized(%q, %q) = %v, want %v", tc.source, tc.target, got, tc.match)
+			}
+		})
+	}
+
+	t.Run("RankMatchNormalizedFold with accents", func(t *testing.T) {
+		// "résumé" normalized+folded matches "resume"
+		rank := RankMatchNormalizedFold("resume", "RÉSUMÉ")
+		if rank < 0 {
+			t.Errorf("expected match for resume/RÉSUMÉ, got %d", rank)
+		}
+	})
+
+	t.Run("FindNormalizedFold unicode", func(t *testing.T) {
+		targets := []string{"café", "CAFÉ", "Café", "coffee"}
+		matches := FindNormalizedFold("cafe", targets)
+		testutils.Equal(t, len(matches), 3)
+	})
+}
+
 func ExampleMatch() {
 	fmt.Print(Match("twl", "cartwheel"))
 	// Output: true
