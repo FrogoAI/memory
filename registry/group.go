@@ -6,15 +6,16 @@ import (
 	"github.com/FrogoAI/memory/orderedmap"
 )
 
-// Group contains all entities for given type
+// Group contains all entities for given type.
+// Thread-safe via SafeOrderedMap.
 type Group[K comparable, V any] struct {
-	entities *orderedmap.OrderedMap[K, V]
+	entities *orderedmap.SafeOrderedMap[K, V]
 }
 
 // NewGroup return registry
 func NewGroup[K comparable, V any]() *Group[K, V] {
 	return &Group[K, V]{
-		entities: &orderedmap.OrderedMap[K, V]{},
+		entities: &orderedmap.SafeOrderedMap[K, V]{},
 	}
 }
 

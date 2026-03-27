@@ -1,3 +1,4 @@
+// Package comparator provides stateless comparison functions that are safe for concurrent use.
 package comparator
 
 import (

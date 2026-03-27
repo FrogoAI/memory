@@ -31,6 +31,121 @@ func TestCustomID(t *testing.T) {
 	testutils.Equal(t, l.ByID(test2.ID()).Next().Next().Value, &MockEntity{id: "test1"})
 }
 
+// Prevent compiler optimization of benchmark results.
+var benchResult any
+
+func benchmarkSizes() []struct {
+	name string
+	size int
+} {
+	return []struct {
+		name string
+		size int
+	}{
+		{"n=100", 100},
+		{"n=1000", 1000},
+		{"n=10000", 10000},
+	}
+}
+
+func BenchmarkPushBack(b *testing.B) {
+	for _, tc := range benchmarkSizes() {
+		b.Run(tc.name, func(b *testing.B) {
+			for range b.N {
+				l := New[int]()
+				for i := range tc.size {
+					l.PushBack(i)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkPushFront(b *testing.B) {
+	for _, tc := range benchmarkSizes() {
+		b.Run(tc.name, func(b *testing.B) {
+			for range b.N {
+				l := New[int]()
+				for i := range tc.size {
+					l.PushFront(i)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkByID(b *testing.B) {
+	for _, tc := range benchmarkSizes() {
+		b.Run(tc.name, func(b *testing.B) {
+			l := New[int]()
+			ids := make([]string, tc.size)
+			for i := range tc.size {
+				e := l.PushBack(i)
+				ids[i] = e.ID()
+			}
+
+			b.ResetTimer()
+
+			for i := range b.N {
+				benchResult = l.ByID(ids[i%tc.size])
+			}
+		})
+	}
+}
+
+func BenchmarkRemove(b *testing.B) {
+	for _, tc := range benchmarkSizes() {
+		b.Run(tc.name, func(b *testing.B) {
+			for range b.N {
+				b.StopTimer()
+
+				l := New[int]()
+				elements := make([]*Element[int], tc.size)
+				for i := range tc.size {
+					elements[i] = l.PushBack(i)
+				}
+
+				b.StartTimer()
+
+				for _, e := range elements {
+					l.Remove(e)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkList(b *testing.B) {
+	for _, tc := range benchmarkSizes() {
+		b.Run(tc.name, func(b *testing.B) {
+			l := New[int]()
+			for i := range tc.size {
+				l.PushBack(i)
+			}
+
+			b.ResetTimer()
+
+			for range b.N {
+				benchResult = l.List()
+			}
+		})
+	}
+}
+
+func BenchmarkMoveToFront(b *testing.B) {
+	l := New[int]()
+	elements := make([]*Element[int], 1000)
+	for i := range 1000 {
+		elements[i] = l.PushBack(i)
+	}
+
+	b.ResetTimer()
+
+	for i := range b.N {
+		l.MoveToFront(elements[i%1000])
+	}
+}
+
 func TestListCopy(t *testing.T) {
 	l := New[string]()
 	l.PushFront("test")

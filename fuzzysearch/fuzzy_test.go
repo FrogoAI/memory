@@ -400,6 +400,29 @@ func BenchmarkRankMatchBigEarly(b *testing.B) {
 	}
 }
 
+func BenchmarkRankFind(b *testing.B) {
+	targets := []string{"cartwheel", "foobar", "wheel", "baz"}
+	wordsLarge := strings.Fields(deBelloGallico)
+
+	b.Run("Small", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			RankFind("whl", targets)
+		}
+	})
+
+	b.Run("Large", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			RankFind("war", wordsLarge)
+		}
+	})
+
+	b.Run("NoMatch", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			RankFind("zzz", targets)
+		}
+	})
+}
+
 func ExampleMatch() {
 	fmt.Print(Match("twl", "cartwheel"))
 	// Output: true

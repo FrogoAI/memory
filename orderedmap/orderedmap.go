@@ -1,18 +1,14 @@
+// Package orderedmap provides an insertion-ordered map.
+//
+// NOT safe for concurrent use. Callers must synchronize access externally.
 package orderedmap
 
-import (
-	"sync"
-)
-
 type OrderedMap[K comparable, V any] struct {
-	values map[K]V      // nolint:structcheck
-	keys   []K          // nolint:structcheck
-	mu     sync.RWMutex // nolint:structcheck
+	values map[K]V // nolint:structcheck
+	keys   []K     // nolint:structcheck
 }
 
 func (o *OrderedMap[K, V]) Copy() *OrderedMap[K, V] {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
 
 	s := &OrderedMap[K, V]{}
 	for _, key := range o.keys {
@@ -23,16 +19,12 @@ func (o *OrderedMap[K, V]) Copy() *OrderedMap[K, V] {
 }
 
 func (o *OrderedMap[K, V]) Clear() {
-	o.mu.Lock()
-	defer o.mu.Unlock()
 
 	o.values = map[K]V{}
 	o.keys = []K{}
 }
 
 func (o *OrderedMap[K, V]) Add(key K, val V) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
 
 	if o.values == nil {
 		o.values = map[K]V{}
@@ -47,8 +39,6 @@ func (o *OrderedMap[K, V]) Add(key K, val V) {
 }
 
 func (o *OrderedMap[K, V]) Remove(key K) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
 
 	for i, k := range o.keys {
 		if k == key {
@@ -61,15 +51,11 @@ func (o *OrderedMap[K, V]) Remove(key K) {
 }
 
 func (o *OrderedMap[K, V]) Get(key K) V {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
 
 	return o.values[key]
 }
 
 func (o *OrderedMap[K, V]) Exists(key K) bool {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
 
 	_, exists := o.values[key]
 
@@ -77,8 +63,6 @@ func (o *OrderedMap[K, V]) Exists(key K) bool {
 }
 
 func (o *OrderedMap[K, V]) Size() int {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
 
 	return len(o.keys)
 }
@@ -90,8 +74,6 @@ func (o *OrderedMap[K, V]) SetKeys(keys []K, def V) {
 }
 
 func (o *OrderedMap[K, V]) GetAll() ([]K, []V) {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
 
 	keys := make([]K, len(o.keys))
 	copy(keys, o.keys)
@@ -105,8 +87,6 @@ func (o *OrderedMap[K, V]) GetAll() ([]K, []V) {
 }
 
 func (o *OrderedMap[K, V]) GetMap() map[K]V {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
 
 	res := map[K]V{}
 	for _, key := range o.keys {
@@ -117,8 +97,6 @@ func (o *OrderedMap[K, V]) GetMap() map[K]V {
 }
 
 func (o *OrderedMap[K, V]) SetAll(values []V) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
 
 	if len(o.keys) > len(values) {
 		return
@@ -134,9 +112,6 @@ func (o *OrderedMap[K, V]) Iterator(size int) chan V {
 	ch := make(chan V, size)
 
 	go func() {
-		o.mu.RLock()
-		defer o.mu.RUnlock()
-
 		for _, key := range o.keys {
 			ch <- o.values[key]
 		}

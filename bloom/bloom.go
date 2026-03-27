@@ -1,3 +1,7 @@
+// Package bloom provides a counting Bloom filter for probabilistic
+// membership testing with element removal support.
+//
+// NOT safe for concurrent use. Callers must synchronize access externally.
 package bloom
 
 import (
@@ -53,6 +57,8 @@ func estimates(n uint32, p float64) (uint32, uint32, error) {
 	return uint32(m), uint32(k), nil
 }
 
+// CountingFilter is a probabilistic data structure that supports
+// both membership testing and element removal.
 type CountingFilter struct {
 	*filter
 	counters []byte
@@ -106,9 +112,8 @@ func (f *CountingFilter) Remove(data []byte) {
 	}
 }
 
-// Clear clears all counters in the filter.
+// Clear resets all counters in the filter.
 func (f *CountingFilter) Clear() {
-	// More efficient than re-allocating memory
 	for i := range f.counters {
 		f.counters[i] = 0
 	}

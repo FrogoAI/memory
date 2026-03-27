@@ -1,9 +1,11 @@
+// Package sortedset provides a sorted set backed by a skip list.
+//
+// NOT safe for concurrent use. Callers must synchronize access externally.
 package sortedset
 
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 
 	"github.com/FrogoAI/memory/comparator"
 )
@@ -22,7 +24,6 @@ type SortedSet[K comparable, V comparable] struct {
 	comparator comparator.Comparator
 	length     uint64
 	level      int
-	mu         sync.RWMutex
 }
 
 // compare wraps the comparator and panics on type mismatch.
@@ -203,8 +204,6 @@ func NewSortedSet[K comparable, V comparable](c comparator.Comparator) *SortedSe
 
 // Len returns the number of elements in the sorted set.
 func (s *SortedSet[K, V]) Len() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 
 	return int(s.length)
 }
@@ -212,8 +211,6 @@ func (s *SortedSet[K, V]) Len() int {
 // PeekMin get the element with minimum key, nil if the set is empty
 // Time complexity of this method is : O(log(N))
 func (s *SortedSet[K, V]) PeekMin() *Node[K, V] {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 
 	f := s.header.level[0].forward
 
@@ -223,8 +220,6 @@ func (s *SortedSet[K, V]) PeekMin() *Node[K, V] {
 // PopMin get and remove the element with minimal key, nil if the set is empty
 // Time complexity of this method is : O(log(N))
 func (s *SortedSet[K, V]) PopMin() *Node[K, V] {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	x := s.header.level[0].forward
 	if x != nil {
@@ -237,8 +232,6 @@ func (s *SortedSet[K, V]) PopMin() *Node[K, V] {
 // PeekMax get the element with maximum key, nil if the set is empty
 // Time Complexity : O(1)
 func (s *SortedSet[K, V]) PeekMax() *Node[K, V] {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 
 	t := s.tail
 
@@ -248,8 +241,6 @@ func (s *SortedSet[K, V]) PeekMax() *Node[K, V] {
 // PopMax get and remove the element with maximum key, nil if the set is empty
 // Time complexity of this method is : O(log(N))
 func (s *SortedSet[K, V]) PopMax() *Node[K, V] {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	x := s.tail
 	if x != nil {
@@ -265,8 +256,6 @@ func (s *SortedSet[K, V]) PopMax() *Node[K, V] {
 func (s *SortedSet[K, V]) Upsert(key K, value V) bool {
 	var newNode *Node[K, V]
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	found := s.dict[value]
 	if found != nil {
@@ -291,8 +280,6 @@ func (s *SortedSet[K, V]) Upsert(key K, value V) bool {
 // Remove delete element specified by key
 // Time complexity of this method is : O(log(N))
 func (s *SortedSet[K, V]) Remove(value V) *Node[K, V] {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	found := s.dict[value]
 	if found != nil {
@@ -331,8 +318,6 @@ func (s *SortedSet[K, V]) GetUntilKey(untilKey K, remove bool) []any {
 // If options is nil, it `searches` in interval [start, end] without any limit by default
 // Time complexity of this method is : O(log(N))
 func (s *SortedSet[K, V]) GetByKeyRange(start K, end K, options *GetByKeyRangeOptions) []*Node[K, V] { //nolint:gocyclo
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	// prepare parameters
 	limit := maxLimit
@@ -456,8 +441,6 @@ func (s *SortedSet[K, V]) GetByKeyRange(start K, end K, options *GetByKeyRangeOp
 // If remove is true, the returned nodes are removed
 // Time complexity of this method is : O(log(N))
 func (s *SortedSet[K, V]) GetByRankRange(start int, end int, remove bool) []*Node[K, V] {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	/* Sanitize indexes. */
 	if start < 0 {
@@ -546,8 +529,6 @@ func (s *SortedSet[K, V]) GetByRank(rank int, remove bool) *Node[K, V] {
 // If node is not found, nil is returned
 // Time complexity : O(1)
 func (s *SortedSet[K, V]) GetByValue(value V) *Node[K, V] {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 
 	n := s.dict[value]
 
@@ -563,8 +544,6 @@ func (s *SortedSet[K, V]) Contains(value V) bool {
 // If the node is not found, 0 is returned. Otherwise rank(> 0) is returned
 // Time complexity of this method is : O(log(N))
 func (s *SortedSet[K, V]) FindRank(value V) int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 
 	rank := 0
 	node := s.dict[value]

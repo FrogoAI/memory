@@ -1,5 +1,7 @@
-// Fuzzy searching allows for flexibly matching a string with partial input,
-// useful for filtering data very quickly based on lightweight user input.
+// Package fuzzysearch provides fuzzy string matching with Levenshtein distance ranking,
+// useful for filtering data quickly based on lightweight user input.
+//
+// It is NOT safe for concurrent use; callers must synchronize access.
 package fuzzysearch
 
 import (

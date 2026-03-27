@@ -1,3 +1,5 @@
+// Package utils provides hashing, sorting, and string helpers (stateless, safe for concurrent use)
+// as well as SafeMap and SafeList which are thread-safe via read-write mutexes.
 package utils
 
 import (

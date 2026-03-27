@@ -1,3 +1,7 @@
+// Package btree provides a B-tree for ordered key-value storage
+// with configurable order.
+//
+// NOT safe for concurrent use. Callers must synchronize access externally.
 package btree
 
 import (
@@ -42,7 +46,7 @@ const (
 	MinOrder = 3
 )
 
-// Tree holds elements of the B-tree
+// Tree holds elements of the B-tree.
 type Tree[K comparable, V any] struct {
 	Root       *Node[K, V]           // Root node
 	Comparator comparator.Comparator // Key comparator
@@ -126,7 +130,7 @@ func (tree *Tree[K, V]) Remove(key K) (err error) {
 	return nil
 }
 
-// Empty returns true if tree does not contain any nodes
+// Empty returns true if tree does not contain any nodes.
 func (tree *Tree[K, V]) Empty() bool {
 	return tree.size == 0
 }
@@ -136,10 +140,10 @@ func (tree *Tree[K, V]) Len() int {
 	return tree.size
 }
 
-// Keys returns all keys in-order
+// Keys returns all keys in-order.
 func (tree *Tree[K, V]) Keys() []K {
 	keys := make([]K, tree.size)
-	it := tree.Iterator()
+	it := Iterator[K, V]{tree: tree, node: nil, position: begin}
 
 	for i := 0; it.Next(); i++ {
 		keys[i] = it.Key()
@@ -152,7 +156,7 @@ func (tree *Tree[K, V]) Keys() []K {
 func (tree *Tree[K, V]) Values() []any {
 	values := make([]any, tree.size)
 
-	it := tree.Iterator()
+	it := Iterator[K, V]{tree: tree, node: nil, position: begin}
 	for i := 0; it.Next(); i++ {
 		values[i] = it.Value()
 	}
@@ -178,7 +182,7 @@ func (tree *Tree[K, V]) Left() *Node[K, V] {
 
 // LeftKey returns the left-most (min) key or nil if tree is empty.
 func (tree *Tree[K, V]) LeftKey() any {
-	if left := tree.Left(); left != nil {
+	if left := tree.left(tree.Root); left != nil {
 		return left.Entries[0].Key
 	}
 
@@ -187,7 +191,7 @@ func (tree *Tree[K, V]) LeftKey() any {
 
 // LeftValue returns the left-most value or nil if tree is empty.
 func (tree *Tree[K, V]) LeftValue() any {
-	if left := tree.Left(); left != nil {
+	if left := tree.left(tree.Root); left != nil {
 		return left.Entries[0].Value
 	}
 
@@ -201,7 +205,7 @@ func (tree *Tree[K, V]) Right() *Node[K, V] {
 
 // RightKey returns the right-most (max) key or nil if tree is empty.
 func (tree *Tree[K, V]) RightKey() any {
-	if right := tree.Right(); right != nil {
+	if right := tree.right(tree.Root); right != nil {
 		return right.Entries[len(right.Entries)-1].Key
 	}
 
@@ -210,14 +214,14 @@ func (tree *Tree[K, V]) RightKey() any {
 
 // RightValue returns the right-most value or nil if tree is empty.
 func (tree *Tree[K, V]) RightValue() any {
-	if right := tree.Right(); right != nil {
+	if right := tree.right(tree.Root); right != nil {
 		return right.Entries[len(right.Entries)-1].Value
 	}
 
 	return nil
 }
 
-// String returns a string representation of container (for debugging purposes)
+// String returns a string representation of container (for debugging purposes).
 func (tree *Tree[K, V]) String() string {
 	var buffer bytes.Buffer
 	if _, err := buffer.WriteString("BTree\n"); err != nil {

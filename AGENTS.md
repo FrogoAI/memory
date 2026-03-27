@@ -120,10 +120,15 @@ Each data structure package follows a consistent pattern:
 
 ### Thread-safety convention
 
-- Thread-safe packages MUST document it in the package comment: `// Package X provides a thread-safe ...`
-- Non-thread-safe packages MUST document it: `// Package X is NOT safe for concurrent use.`
-- When adding thread safety, use `sync.RWMutex` (read-heavy) or `sync.Mutex` (write-heavy).
-- All public methods on a thread-safe type must be protected. No partial safety.
+Data structure packages are **NOT thread-safe by default** — callers synchronize externally. This matches Go stdlib (`container/list`, `container/heap`, maps, slices) and avoids forcing mutex overhead on single-goroutine users.
+
+**Exceptions** (thread-safe by design):
+- `registry/` — manages shared state across goroutines; `Group` has its own `sync.RWMutex`.
+- `utils/SafeMap`, `utils/SafeList` — explicitly named "Safe", that's their contract.
+
+Every package comment MUST state its concurrency guarantee:
+- `// NOT safe for concurrent use. Callers must synchronize access externally.`
+- Or: `// Thread-safe: all methods are protected by a read-write mutex.`
 
 ## 5. Coding Standards
 

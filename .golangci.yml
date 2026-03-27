@@ -1,0 +1,84 @@
+version: "2"
+
+run:
+  go: "1.25"
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    # Standard essentials
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    # Strict additions
+    - gosec
+    - revive
+    - misspell
+    - lll
+    - forbidigo
+    - mnd
+    - wsl_v5
+
+  settings:
+    lll:
+      line-length: 120
+
+    forbidigo:
+      forbid:
+        - pattern: "^fmt\\.Print(f|ln)?$"
+          msg: "use log/slog for logging; fmt.Print* writes to stdout"
+        - pattern: "^log\\.Print(f|ln)?$"
+          msg: "use log/slog instead of log.Print*"
+        - pattern: "^print(ln)?$"
+          msg: "use log/slog instead of bare print/println"
+
+    revive:
+      rules:
+        - name: exported
+        - name: var-naming
+        - name: package-comments
+        - name: dot-imports
+        - name: blank-imports
+        - name: increment-decrement
+        - name: error-return
+        - name: error-naming
+        - name: if-return
+        - name: range
+        - name: time-naming
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: redefines-builtin-id
+        - name: waitgroup-by-value
+        - name: unconditional-recursion
+        - name: struct-tag
+        - name: unexported-return
+
+  exclusions:
+    generated: lax
+    rules:
+      - linters: [gosec]
+        path: _test\.go
+      - linters: [mnd]
+        path: _test\.go
+      - linters: [lll]
+        path: _test\.go
+      - linters: [forbidigo]
+        path: _test\.go
+
+formatters:
+  enable:
+    - gofumpt
+    - gci
+    - goimports
+
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/FrogoAI/memory)

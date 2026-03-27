@@ -1,6 +1,7 @@
 package hll
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/FrogoAI/testutils"
@@ -52,4 +53,95 @@ func TestHLL(t *testing.T) {
 	testutils.Equal(t, h1.Count(), uint64(10000))
 	testutils.Equal(t, h2.Count(), uint64(10000))
 	testutils.Equal(t, u, uint64(15000))
+}
+
+// Prevent compiler optimization of benchmark results.
+var benchCount uint64
+
+func benchHLL(b *testing.B, n int) *HyperLogLog {
+	b.Helper()
+
+	h, err := New()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	for i := range n {
+		h.Add([]byte(fmt.Sprintf("key-%d", i)))
+	}
+
+	return h
+}
+
+func BenchmarkAdd(b *testing.B) {
+	h, err := New()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	data := make([][]byte, 10000)
+	for i := range data {
+		data[i] = []byte(fmt.Sprintf("key-%d", i))
+	}
+
+	b.ResetTimer()
+
+	for i := range b.N {
+		h.Add(data[i%len(data)])
+	}
+}
+
+func BenchmarkAddAny(b *testing.B) {
+	h, err := New()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+
+	for i := range b.N {
+		_ = h.AddAny(i)
+	}
+}
+
+func BenchmarkCount(b *testing.B) {
+	h := benchHLL(b, 10000)
+
+	b.ResetTimer()
+
+	for range b.N {
+		benchCount = h.Count()
+	}
+}
+
+func BenchmarkUnion(b *testing.B) {
+	h1 := benchHLL(b, 5000)
+	h2 := benchHLL(b, 5000)
+
+	b.ResetTimer()
+
+	for range b.N {
+		_, _ = h1.Union(h2)
+	}
+}
+
+func BenchmarkToBytes(b *testing.B) {
+	h := benchHLL(b, 10000)
+
+	b.ResetTimer()
+
+	for range b.N {
+		_ = h.ToBytes()
+	}
+}
+
+func BenchmarkFromBytes(b *testing.B) {
+	h := benchHLL(b, 10000)
+	raw := h.ToBytes()
+
+	b.ResetTimer()
+
+	for range b.N {
+		_, _ = FromBytes(raw)
+	}
 }

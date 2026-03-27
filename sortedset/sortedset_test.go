@@ -1,6 +1,7 @@
 package sortedset
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -132,5 +133,60 @@ func BenchmarkTopWithRemove(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		resultList = s.GetTop(5, true)
+	}
+}
+
+var (
+	benchNode  *Node[int, int]
+	benchNodes []*Node[int, int]
+)
+
+func BenchmarkAdd(b *testing.B) {
+	for _, size := range []int{100, 1000, 10000} {
+		b.Run(fmt.Sprintf("n_%d", size), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				s := NewSortedSet[int, int](comparator.IntComparator)
+				for j := 0; j < size; j++ {
+					s.Upsert(j, j)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkGetByRank(b *testing.B) {
+	for _, size := range []int{100, 1000, 10000} {
+		b.Run(fmt.Sprintf("n_%d", size), func(b *testing.B) {
+			s := NewSortedSet[int, int](comparator.IntComparator)
+			for j := 0; j < size; j++ {
+				s.Upsert(j, j)
+			}
+
+			mid := size / 2
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				benchNode = s.GetByRank(mid, false)
+			}
+		})
+	}
+}
+
+func BenchmarkRange(b *testing.B) {
+	for _, size := range []int{100, 1000, 10000} {
+		b.Run(fmt.Sprintf("n_%d", size), func(b *testing.B) {
+			s := NewSortedSet[int, int](comparator.IntComparator)
+			for j := 0; j < size; j++ {
+				s.Upsert(j, j)
+			}
+
+			start := size / 4
+			end := size * 3 / 4
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				benchNodes = s.GetByKeyRange(start, end, nil)
+			}
+		})
 	}
 }

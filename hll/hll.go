@@ -1,3 +1,6 @@
+// Package hll provides a HyperLogLog probabilistic cardinality estimator.
+//
+// NOT safe for concurrent use. Callers must synchronize access externally.
 package hll
 
 import (
@@ -17,6 +20,7 @@ var DefaultSettings = hll.Settings{
 	SparseEnabled:     true,
 }
 
+// HyperLogLog is a probabilistic cardinality estimator.
 type HyperLogLog struct {
 	HLL hll.Hll
 }
@@ -87,6 +91,23 @@ func (h *HyperLogLog) Count() uint64 {
 	return h.HLL.Cardinality()
 }
 
+// Len returns the estimated number of distinct items in the set.
+func (h *HyperLogLog) Len() int {
+	return int(h.HLL.Cardinality())
+}
+
+// Clear resets the HyperLogLog to an empty state.
+func (h *HyperLogLog) Clear() error {
+	fresh, err := hll.NewHll(DefaultSettings)
+	if err != nil {
+		return err
+	}
+
+	h.HLL = fresh
+
+	return nil
+}
+
 func (h *HyperLogLog) IntersectionCount(h2 *HyperLogLog) (uint64, error) {
 	hc, err := hll.NewHll(DefaultSettings)
 	if err != nil {
@@ -94,7 +115,10 @@ func (h *HyperLogLog) IntersectionCount(h2 *HyperLogLog) (uint64, error) {
 	}
 
 	hc.Union(h.HLL)
-	hc.Union(h2.HLL)
+	cardH := h.HLL.Cardinality()
 
-	return h.HLL.Cardinality() + h2.HLL.Cardinality() - hc.Cardinality(), nil
+	hc.Union(h2.HLL)
+	cardH2 := h2.HLL.Cardinality()
+
+	return cardH + cardH2 - hc.Cardinality(), nil
 }

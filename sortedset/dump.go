@@ -8,9 +8,6 @@ type Dump struct {
 }
 
 func (s *SortedSet[K, V]) Dump(makeDump func(key K, value V) (string, string, error)) (string, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	data := map[string][]string{}
 
 	for _, v := range s.dict {

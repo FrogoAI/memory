@@ -213,6 +213,344 @@ func TestAsyncRegistry(t *testing.T) {
 	}
 }
 
+func TestConcurrentAddGetRemove(t *testing.T) {
+	r := NewRegistry[string, uint64, string]()
+
+	const goroutines = 20
+	const ops = 50
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 3)
+
+	for i := range goroutines {
+		go func(base int) {
+			defer wg.Done()
+
+			for j := range ops {
+				id := uint64(base*ops + j + 1)
+				r.Add(KeyTemporary, id, "value")
+			}
+		}(i)
+	}
+
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+
+			for j := range ops {
+				r.Get(KeyTemporary, uint64(j+1))
+			}
+		}()
+	}
+
+	for i := range goroutines {
+		go func(base int) {
+			defer wg.Done()
+
+			for j := range ops {
+				id := uint64(base*ops + j + 1)
+				r.Remove(KeyTemporary, id)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestConcurrentGroupCreateDelete(t *testing.T) {
+	r := NewRegistry[int, uint64, any]()
+
+	const goroutines = 20
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 3)
+
+	for i := range goroutines {
+		go func(i int) {
+			defer wg.Done()
+
+			err := r.Add(i%5, uint64(i+1), &MockEntity{id: uint64(i + 1)})
+			if err != nil {
+				t.Errorf("add failed: %v", err)
+			}
+		}(i)
+	}
+
+	for i := range goroutines {
+		go func(i int) {
+			defer wg.Done()
+			r.DeleteGroup(i % 5)
+		}(i)
+	}
+
+	for i := range goroutines {
+		go func(i int) {
+			defer wg.Done()
+			r.GetGroup(i % 5)
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestConcurrentIndex(t *testing.T) {
+	r := NewRegistry[string, uint64, any]()
+
+	const goroutines = 20
+	const ops = 50
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 3)
+
+	for i := range goroutines {
+		go func(base int) {
+			defer wg.Done()
+
+			for j := range ops {
+				r.AddIndex(uint64(base*ops+j), uint64(j))
+			}
+		}(i)
+	}
+
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+
+			for j := range ops {
+				r.GetIndex(uint64(j))
+			}
+		}()
+	}
+
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+
+			for j := range ops {
+				r.RemIndex(uint64(j))
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
+func TestConcurrentGetKeysAndSize(t *testing.T) {
+	r := NewRegistry[int, uint64, any]()
+
+	const goroutines = 20
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 3)
+
+	for i := range goroutines {
+		go func(i int) {
+			defer wg.Done()
+
+			err := r.Add(i, uint64(i+1), &MockEntity{id: uint64(i + 1)})
+			if err != nil {
+				t.Errorf("add failed: %v", err)
+			}
+		}(i)
+	}
+
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			r.GetKeys()
+		}()
+	}
+
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			r.Size()
+		}()
+	}
+
+	wg.Wait()
+}
+
+func TestConcurrentIDOperations(t *testing.T) {
+	r := NewRegistry[string, uint64, any]()
+
+	const goroutines = 20
+	const ops = 100
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 3)
+
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+
+			for range ops {
+				r.NextID()
+			}
+		}()
+	}
+
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+
+			for range ops {
+				r.LatestID()
+			}
+		}()
+	}
+
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+
+			for range ops {
+				r.SetLatestID(42)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if r.LatestID() == 0 {
+		t.Fatal("expected non-zero latest ID after concurrent operations")
+	}
+}
+
+func TestConcurrentGetValues(t *testing.T) {
+	r := NewRegistry[string, uint64, any]()
+
+	for i := range 50 {
+		err := r.Add(KeyTemporary, uint64(i+1), &MockEntity{id: uint64(i + 1)})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	const goroutines = 20
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 2)
+
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			r.GetValues(KeyTemporary)
+		}()
+	}
+
+	for i := range goroutines {
+		go func(i int) {
+			defer wg.Done()
+
+			id := uint64(1000 + i + 1)
+
+			err := r.Add(KeyTemporary, id, &MockEntity{id: id})
+			if err != nil {
+				t.Errorf("add failed: %v", err)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestConcurrentRemoveIDEverywhere(t *testing.T) {
+	r := NewRegistry[string, uint64, any]()
+	groups := []string{"g1", "g2", "g3", "g4", "g5"}
+
+	for _, g := range groups {
+		for i := range 20 {
+			err := r.Add(g, uint64(i+1), &MockEntity{id: uint64(i + 1)})
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	const goroutines = 10
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 2)
+
+	for i := range goroutines {
+		go func(i int) {
+			defer wg.Done()
+			r.RemoveIDEverywhere(uint64(i + 1))
+		}(i)
+	}
+
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+
+			for _, g := range groups {
+				r.GetValues(g)
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
+func TestConcurrentClearGroup(t *testing.T) {
+	r := NewRegistry[string, uint64, any]()
+
+	const goroutines = 20
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 2)
+
+	for i := range goroutines {
+		go func(i int) {
+			defer wg.Done()
+
+			err := r.Add(KeyTemporary, uint64(i+1), &MockEntity{id: uint64(i + 1)})
+			if err != nil {
+				t.Errorf("add failed: %v", err)
+			}
+		}(i)
+	}
+
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			r.ClearGroup(KeyTemporary)
+		}()
+	}
+
+	wg.Wait()
+}
+
+func TestConcurrentGetGroups(t *testing.T) {
+	r := NewRegistry[int, uint64, any]()
+
+	const goroutines = 20
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 2)
+
+	for i := range goroutines {
+		go func(i int) {
+			defer wg.Done()
+
+			err := r.Add(i%5, uint64(i+1), &MockEntity{id: uint64(i + 1)})
+			if err != nil {
+				t.Errorf("add failed: %v", err)
+			}
+		}(i)
+	}
+
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			r.GetGroups(0, 1, 2, 3, 4)
+		}()
+	}
+
+	wg.Wait()
+}
+
 /*
 BenchmarkGetString-4            20000000                63.1 ns/op             0 B/op          0 allocs/op
 BenchmarkGetEntity-4            20000000                64.5 ns/op             0 B/op          0 allocs/op
@@ -307,6 +645,47 @@ func BenchmarkSetDeleteString(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func BenchmarkIterator(b *testing.B) {
+	b.StopTimer()
+
+	r := NewRegistry[string, uint64, any]()
+	for i := range 1000 {
+		err := r.Add(KeyTemporary, uint64(i+1), &MockEntity{id: uint64(i + 1)})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	b.StartTimer()
+
+	for range b.N {
+		for v := range r.Iterator(KeyTemporary) {
+			data = v
+		}
+	}
+}
+
+func BenchmarkSearchOne(b *testing.B) {
+	b.StopTimer()
+
+	r := NewRegistry[string, uint64, any]()
+	for i := range 1000 {
+		err := r.Add(KeyTemporary, uint64(i+1), &MockEntity{id: uint64(i + 1)})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	b.StartTimer()
+
+	for i := range b.N {
+		target := uint64(i%1000 + 1)
+		data = r.SearchOne(KeyTemporary, func(_ interface{}, id interface{}, _ interface{}) bool {
+			return id.(uint64) == target
+		})
 	}
 }
 

@@ -1371,252 +1371,111 @@ func TestBTreeComparatorTypeMismatch(t *testing.T) {
 	})
 }
 
-func benchmarkGet(b *testing.B, tree *Tree[int, any], size int) {
-	for i := 0; i < b.N; i++ {
-		for n := 0; n < size; n++ {
-			tree.Get(n)
-		}
+func benchmarkSizes() []struct {
+	name string
+	size int
+} {
+	return []struct {
+		name string
+		size int
+	}{
+		{"n=100", 100},
+		{"n=1000", 1000},
+		{"n=10000", 10000},
+		{"n=100000", 100000},
 	}
 }
 
-func benchmarkPut(b *testing.B, tree *Tree[int, any], size int) {
-	for i := 0; i < b.N; i++ {
-		for n := 0; n < size; n++ {
-			tree.Put(n, struct{}{})
-		}
+func BenchmarkPut(b *testing.B) {
+	for _, tc := range benchmarkSizes() {
+		b.Run(tc.name, func(b *testing.B) {
+			tree, err := NewWithIntComparator(128)
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				for n := 0; n < tc.size; n++ {
+					tree.Put(n, struct{}{})
+				}
+			}
+		})
 	}
 }
 
-func benchmarkRemove(b *testing.B, tree *Tree[int, any], size int) {
-	for i := 0; i < b.N; i++ {
-		for n := 0; n < size; n++ {
-			tree.Remove(n)
-		}
+func BenchmarkGet(b *testing.B) {
+	for _, tc := range benchmarkSizes() {
+		b.Run(tc.name, func(b *testing.B) {
+			tree, err := NewWithIntComparator(128)
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			for n := 0; n < tc.size; n++ {
+				tree.Put(n, struct{}{})
+			}
+
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				for n := 0; n < tc.size; n++ {
+					tree.Get(n)
+				}
+			}
+		})
 	}
 }
 
-/*
-BenchmarkBTreeGet100-12                   271334              4238 ns/op               0 B/op          0 allocs/op
-BenchmarkBTreeGet1000-12                   12499            103069 ns/op            5952 B/op        744 allocs/op
-BenchmarkBTreeGet10000-12                    908           1229919 ns/op           77955 B/op       9744 allocs/op
-BenchmarkBTreeGet100000-12                    81          15505512 ns/op          797957 B/op      99744 allocs/op
-BenchmarkBTreePut100-12                   147436             11404 ns/op            3200 B/op        100 allocs/op
-BenchmarkBTreePut1000-12                    9090            134715 ns/op           37952 B/op       1744 allocs/op
-BenchmarkBTreePut10000-12                    727           1663305 ns/op          397958 B/op      19744 allocs/op
-BenchmarkBTreePut100000-12                    62          19119667 ns/op         3997978 B/op     199744 allocs/op
-BenchmarkBTreeRemove100-12               1952350               540 ns/op               0 B/op          0 allocs/op
-BenchmarkBTreeRemove1000-12                93166             14885 ns/op            5952 B/op        744 allocs/op
-BenchmarkBTreeRemove10000-12                6432            178063 ns/op           77952 B/op       9744 allocs/op
-BenchmarkBTreeRemove100000-12                610           1824637 ns/op          797960 B/op      99744 allocs/op
-*/
-func BenchmarkBTreeGet100(b *testing.B) {
-	b.StopTimer()
+func BenchmarkRemove(b *testing.B) {
+	for _, tc := range benchmarkSizes() {
+		b.Run(tc.name, func(b *testing.B) {
+			tree, err := NewWithIntComparator(128)
+			if err != nil {
+				b.Fatal(err)
+			}
 
-	size := 100
+			b.ResetTimer()
 
-	tree, err := NewWithIntComparator(128)
-	if err != nil {
-		b.Fatal(err)
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+
+				for n := 0; n < tc.size; n++ {
+					tree.Put(n, struct{}{})
+				}
+
+				b.StartTimer()
+
+				for n := 0; n < tc.size; n++ {
+					tree.Remove(n)
+				}
+			}
+		})
 	}
-
-	for n := 0; n < size; n++ {
-		tree.Put(n, struct{}{})
-	}
-
-	b.StartTimer()
-	benchmarkGet(b, tree, size)
 }
 
-func BenchmarkBTreeGet1000(b *testing.B) {
-	b.StopTimer()
+func BenchmarkIterate(b *testing.B) {
+	for _, tc := range benchmarkSizes() {
+		b.Run(tc.name, func(b *testing.B) {
+			tree, err := NewWithIntComparator(128)
+			if err != nil {
+				b.Fatal(err)
+			}
 
-	size := 1000
+			for n := 0; n < tc.size; n++ {
+				tree.Put(n, struct{}{})
+			}
 
-	tree, err := NewWithIntComparator(128)
-	if err != nil {
-		b.Fatal(err)
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				it := tree.Iterator()
+				for it.Next() {
+					_ = it.Key()
+					_ = it.Value()
+				}
+			}
+		})
 	}
-
-	for n := 0; n < size; n++ {
-		tree.Put(n, struct{}{})
-	}
-
-	b.StartTimer()
-	benchmarkGet(b, tree, size)
-}
-
-func BenchmarkBTreeGet10000(b *testing.B) {
-	b.StopTimer()
-
-	size := 10000
-
-	tree, err := NewWithIntComparator(128)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	for n := 0; n < size; n++ {
-		tree.Put(n, struct{}{})
-	}
-
-	b.StartTimer()
-	benchmarkGet(b, tree, size)
-}
-
-func BenchmarkBTreeGet100000(b *testing.B) {
-	b.StopTimer()
-
-	size := 100000
-
-	tree, err := NewWithIntComparator(128)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	for n := 0; n < size; n++ {
-		tree.Put(n, struct{}{})
-	}
-
-	b.StartTimer()
-	benchmarkGet(b, tree, size)
-}
-
-func BenchmarkBTreePut100(b *testing.B) {
-	b.StopTimer()
-
-	size := 100
-
-	tree, err := NewWithIntComparator(128)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	b.StartTimer()
-	benchmarkPut(b, tree, size)
-}
-
-func BenchmarkBTreePut1000(b *testing.B) {
-	b.StopTimer()
-
-	size := 1000
-
-	tree, err := NewWithIntComparator(128)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	for n := 0; n < size; n++ {
-		tree.Put(n, struct{}{})
-	}
-
-	b.StartTimer()
-	benchmarkPut(b, tree, size)
-}
-
-func BenchmarkBTreePut10000(b *testing.B) {
-	b.StopTimer()
-
-	size := 10000
-
-	tree, err := NewWithIntComparator(128)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	for n := 0; n < size; n++ {
-		tree.Put(n, struct{}{})
-	}
-
-	b.StartTimer()
-	benchmarkPut(b, tree, size)
-}
-
-func BenchmarkBTreePut100000(b *testing.B) {
-	b.StopTimer()
-
-	size := 100000
-
-	tree, err := NewWithIntComparator(128)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	for n := 0; n < size; n++ {
-		tree.Put(n, struct{}{})
-	}
-
-	b.StartTimer()
-	benchmarkPut(b, tree, size)
-}
-
-func BenchmarkBTreeRemove100(b *testing.B) {
-	b.StopTimer()
-
-	size := 100
-
-	tree, err := NewWithIntComparator(128)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	for n := 0; n < size; n++ {
-		tree.Put(n, struct{}{})
-	}
-
-	b.StartTimer()
-	benchmarkRemove(b, tree, size)
-}
-
-func BenchmarkBTreeRemove1000(b *testing.B) {
-	b.StopTimer()
-
-	size := 1000
-
-	tree, err := NewWithIntComparator(128)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	for n := 0; n < size; n++ {
-		tree.Put(n, struct{}{})
-	}
-
-	b.StartTimer()
-	benchmarkRemove(b, tree, size)
-}
-
-func BenchmarkBTreeRemove10000(b *testing.B) {
-	b.StopTimer()
-
-	size := 10000
-
-	tree, err := NewWithIntComparator(128)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	for n := 0; n < size; n++ {
-		tree.Put(n, struct{}{})
-	}
-
-	b.StartTimer()
-	benchmarkRemove(b, tree, size)
-}
-
-func BenchmarkBTreeRemove100000(b *testing.B) {
-	b.StopTimer()
-
-	size := 100000
-
-	tree, err := NewWithIntComparator(128)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	for n := 0; n < size; n++ {
-		tree.Put(n, struct{}{})
-	}
-
-	b.StartTimer()
-	benchmarkRemove(b, tree, size)
 }

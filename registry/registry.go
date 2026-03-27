@@ -1,3 +1,4 @@
+// Package registry provides a thread-safe registry; all methods are protected by a read-write mutex.
 package registry
 
 import (
