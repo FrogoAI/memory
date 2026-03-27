@@ -210,9 +210,9 @@ func (r *Registry[G, I, V]) AsyncTick(keys ...G) {
 	wg.Wait()
 }
 
-func (r *Registry[G, I, V]) TruncateGroup(key G) {
+func (r *Registry[G, I, V]) ClearGroup(key G) {
 	group := r.GetGroup(key)
-	group.Truncate()
+	group.Clear()
 }
 
 func (r *Registry[G, I, V]) SearchInGroup(key G, f SearchFunction) chan V {

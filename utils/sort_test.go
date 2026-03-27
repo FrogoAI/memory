@@ -14,7 +14,9 @@ func TestSortInts(t *testing.T) {
 	ints = append(ints, 2)
 	ints = append(ints, 3)
 
-	Sort(ints, comparator.IntComparator)
+	if err := Sort(ints, comparator.IntComparator); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	for i := 1; i < len(ints); i++ {
 		if ints[i-1].(int) > ints[i].(int) {
@@ -30,7 +32,9 @@ func TestSortStrings(t *testing.T) {
 	strings = append(strings, "b")
 	strings = append(strings, "c")
 
-	Sort(strings, comparator.StringComparator)
+	if err := Sort(strings, comparator.StringComparator); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	for i := 1; i < len(strings); i++ {
 		if strings[i-1].(string) > strings[i].(string) {
@@ -45,21 +49,20 @@ func TestSortStructs(t *testing.T) {
 		name string
 	}
 
-	byID := func(a, b interface{}) int {
+	byID := func(a, b interface{}) (int, error) {
 		c1 := a.(User)
-
 		c2 := b.(User)
+
 		switch {
 		case c1.id > c2.id:
-			return 1
+			return 1, nil
 		case c1.id < c2.id:
-			return -1
+			return -1, nil
 		default:
-			return 0
+			return 0, nil
 		}
 	}
 
-	// o1,o2,expected
 	users := []interface{}{
 		User{4, "d"},
 		User{1, "a"},
@@ -67,7 +70,9 @@ func TestSortStructs(t *testing.T) {
 		User{2, "b"},
 	}
 
-	Sort(users, byID)
+	if err := Sort(users, byID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	for i := 1; i < len(users); i++ {
 		if users[i-1].(User).id > users[i].(User).id {
@@ -82,7 +87,9 @@ func TestSortRandom(t *testing.T) {
 		ints = append(ints, rand.Int()) //nolint:gosec
 	}
 
-	Sort(ints, comparator.IntComparator)
+	if err := Sort(ints, comparator.IntComparator); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	for i := 1; i < len(ints); i++ {
 		if ints[i-1].(int) > ints[i].(int) {
@@ -100,6 +107,8 @@ func BenchmarkGoSortRandom(b *testing.B) {
 	}
 
 	b.StartTimer()
-	Sort(ints, comparator.IntComparator)
+
+	_ = Sort(ints, comparator.IntComparator)
+
 	b.StopTimer()
 }

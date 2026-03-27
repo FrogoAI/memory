@@ -1,9 +1,7 @@
 package linkedlist
 
-import (
-	"go.mongodb.org/mongo-driver/bson/primitive"
-)
+import "github.com/google/uuid"
 
 func (l *List[V]) NextID() string {
-	return primitive.NewObjectID().Hex()
+	return uuid.New().String()
 }

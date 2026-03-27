@@ -39,25 +39,18 @@ func newFilter(m, k uint32) *filter {
 	}
 }
 
-func estimates(n uint32, p float64) (uint32, uint32) {
+func estimates(n uint32, p float64) (uint32, uint32, error) {
 	nf := float64(n)
 	log2 := math.Log(2) // nolint:mnd
 	m := -1 * nf * math.Log(p) / (log2 * log2)
 	k := math.Ceil(log2 * m / nf)
 
 	words := m + 31>>5 // nolint:mnd
-	if words >= math.MaxInt32 {
-		panic(fmt.Sprintf("A 32-bit bloom filter with n %d and p %f requires a "+
-			"32-bit bitset with a slice of %f words, but slices cannot contain more than "+
-			"%d elements. Please use the equivalent 64-bit bloom filter, e.g. New64(), "+
-			"instead.", n, p, words, math.MaxInt32-1))
-	} else if m > math.MaxUint32 {
-		panic(fmt.Sprintf("A 32-bit bloom filter with n %d and p %f requires a "+
-			"32-bit bitset with %f bits, but this number overflows an uint32. Please use "+
-			"the equivalent 64-bit bloom filter, e.g. New64(), instead.", n, p, m))
+	if words >= math.MaxInt32 || m > math.MaxUint32 {
+		return 0, 0, fmt.Errorf("%w: n=%d p=%f requires %.0f bits", ErrBitsetTooBig, n, p, m)
 	}
 
-	return uint32(m), uint32(k)
+	return uint32(m), uint32(k), nil
 }
 
 type CountingFilter struct {
@@ -66,13 +59,17 @@ type CountingFilter struct {
 }
 
 // NewCounting creates an optimized counting bloom filter.
-func NewCounting(n int, p float64) *CountingFilter {
-	m, k := estimates(uint32(n), p)
+// It returns ErrBitsetTooBig when n and p require more bits than a 32-bit filter supports.
+func NewCounting(n int, p float64) (*CountingFilter, error) {
+	m, k, err := estimates(uint32(n), p)
+	if err != nil {
+		return nil, err
+	}
 
 	return &CountingFilter{
 		filter:   newFilter(m, k),
 		counters: make([]byte, m),
-	}
+	}, nil
 }
 
 // Test checks if an item is likely in the set.
@@ -109,8 +106,8 @@ func (f *CountingFilter) Remove(data []byte) {
 	}
 }
 
-// Reset clears all counters in the filter.
-func (f *CountingFilter) Reset() {
+// Clear clears all counters in the filter.
+func (f *CountingFilter) Clear() {
 	// More efficient than re-allocating memory
 	for i := range f.counters {
 		f.counters[i] = 0

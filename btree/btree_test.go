@@ -1,10 +1,40 @@
 package btree
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"testing"
+
+	"github.com/FrogoAI/memory/comparator"
 )
+
+func mustPut(t testing.TB, tree *Tree[int, any], key int, value any) {
+	t.Helper()
+
+	if err := tree.Put(key, value); err != nil {
+		t.Fatalf("Put(%v, %v): %v", key, value, err)
+	}
+}
+
+func mustRemove(t testing.TB, tree *Tree[int, any], key int) {
+	t.Helper()
+
+	if err := tree.Remove(key); err != nil {
+		t.Fatalf("Remove(%v): %v", key, err)
+	}
+}
+
+func mustGet(t testing.TB, tree *Tree[int, any], key int) (any, bool) {
+	t.Helper()
+
+	value, found, err := tree.Get(key)
+	if err != nil {
+		t.Fatalf("Get(%v): %v", key, err)
+	}
+
+	return value, found
+}
 
 func TestBTreeGet1(t *testing.T) {
 	tree, err := NewWithIntComparator(3)
@@ -12,15 +42,15 @@ func TestBTreeGet1(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tree.Put(1, "a")
-	tree.Put(2, "b")
-	tree.Put(3, "c")
-	tree.Put(4, "d")
-	tree.Put(5, "e")
-	tree.Put(6, "f")
-	tree.Put(7, "g")
+	mustPut(t, tree, 1, "a")
+	mustPut(t, tree, 2, "b")
+	mustPut(t, tree, 3, "c")
+	mustPut(t, tree, 4, "d")
+	mustPut(t, tree, 5, "e")
+	mustPut(t, tree, 6, "f")
+	mustPut(t, tree, 7, "g")
 
-	v, e := tree.Get(4)
+	v, e := mustGet(t, tree, 4)
 	slog.Info("Test tree get", "v", v, "e", e)
 
 	tests := [][]interface{}{
@@ -36,7 +66,7 @@ func TestBTreeGet1(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if value, found := tree.Get(test[0].(int)); value != test[1] || found != test[2] {
+		if value, found := mustGet(t, tree, test[0].(int)); value != test[1] || found != test[2] {
 			t.Errorf("Got %v,%v expected %v,%v", value, found, test[1], test[2])
 		}
 	}
@@ -48,16 +78,16 @@ func TestBTreeGet2(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tree.Put(7, "g")
-	tree.Put(9, "i")
-	tree.Put(10, "j")
-	tree.Put(6, "f")
-	tree.Put(3, "c")
-	tree.Put(4, "d")
-	tree.Put(5, "e")
-	tree.Put(8, "h")
-	tree.Put(2, "b")
-	tree.Put(1, "a")
+	mustPut(t, tree, 7, "g")
+	mustPut(t, tree, 9, "i")
+	mustPut(t, tree, 10, "j")
+	mustPut(t, tree, 6, "f")
+	mustPut(t, tree, 3, "c")
+	mustPut(t, tree, 4, "d")
+	mustPut(t, tree, 5, "e")
+	mustPut(t, tree, 8, "h")
+	mustPut(t, tree, 2, "b")
+	mustPut(t, tree, 1, "a")
 
 	tests := [][]interface{}{
 		{0, nil, false},
@@ -75,7 +105,7 @@ func TestBTreeGet2(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if value, found := tree.Get(test[0].(int)); value != test[1] || found != test[2] {
+		if value, found := mustGet(t, tree, test[0].(int)); value != test[1] || found != test[2] {
 			t.Errorf("Got %v,%v expected %v,%v", value, found, test[1], test[2])
 		}
 	}
@@ -595,7 +625,7 @@ func TestBTreeRemove9(t *testing.T) {
 			assertValidTree(t, tree, maxElm)
 
 			for i := 1; i <= maxElm; i++ {
-				if _, found := tree.Get(i); !found {
+				if _, found := mustGet(t, tree, i); !found {
 					t.Errorf("Not found %v", i)
 				}
 			}
@@ -615,7 +645,7 @@ func TestBTreeRemove9(t *testing.T) {
 			assertValidTree(t, tree, maxElm)
 
 			for i := maxElm; i > 0; i-- {
-				if _, found := tree.Get(i); !found {
+				if _, found := mustGet(t, tree, i); !found {
 					t.Errorf("Not found %v", i)
 				}
 			}
@@ -754,7 +784,7 @@ func TestBTreeIteratorValuesAndKeys(t *testing.T) {
 		t.Errorf("Got %v expected %v", actualValue, expectedValue)
 	}
 
-	if actualValue := tree.Size(); actualValue != 7 {
+	if actualValue := tree.Len(); actualValue != 7 {
 		t.Errorf("Got %v expected %v", actualValue, 7)
 	}
 }
@@ -816,7 +846,7 @@ func TestBTreeIterator1Next(t *testing.T) {
 		}
 	}
 
-	if actualValue, expectedValue := count, tree.Size(); actualValue != expectedValue {
+	if actualValue, expectedValue := count, tree.Len(); actualValue != expectedValue {
 		t.Errorf("Size different. Got %v expected %v", actualValue, expectedValue)
 	}
 }
@@ -891,7 +921,7 @@ func TestBTreeIterator2Next(t *testing.T) {
 		}
 	}
 
-	if actualValue, expectedValue := count, tree.Size(); actualValue != expectedValue {
+	if actualValue, expectedValue := count, tree.Len(); actualValue != expectedValue {
 		t.Errorf("Size different. Got %v expected %v", actualValue, expectedValue)
 	}
 }
@@ -959,7 +989,7 @@ func TestBTreeIterator3Next(t *testing.T) {
 		}
 	}
 
-	if actualValue, expectedValue := count, tree.Size(); actualValue != expectedValue {
+	if actualValue, expectedValue := count, tree.Len(); actualValue != expectedValue {
 		t.Errorf("Size different. Got %v expected %v", actualValue, expectedValue)
 	}
 }
@@ -1034,7 +1064,7 @@ func TestBTreeIterator4Next(t *testing.T) {
 		}
 	}
 
-	if actualValue, expectedValue := count, tree.Size(); actualValue != expectedValue {
+	if actualValue, expectedValue := count, tree.Len(); actualValue != expectedValue {
 		t.Errorf("Size different. Got %v expected %v", actualValue, expectedValue)
 	}
 }
@@ -1056,7 +1086,7 @@ func TestBTreeIterator4Prev(t *testing.T) {
 	tree.Put(22, 8)
 	tree.Put(27, 10)
 	it := tree.Iterator()
-	count := tree.Size()
+	count := tree.Len()
 
 	for it.Next() {
 	}
@@ -1272,6 +1302,73 @@ func assertValidTreeNode(t *testing.T, node *Node[int, any], expectedEntries int
 			t.Errorf("Got %v expected %v for key", actualValue, expectedValue)
 		}
 	}
+}
+
+func TestBTreeComparatorTypeMismatch(t *testing.T) {
+	// Verify that Put, Get, Remove return errors (not panics) when the
+	// comparator receives a key type it cannot assert.
+
+	t.Run("Put returns error on type mismatch", func(t *testing.T) {
+		tree, err := NewWith[string, any](3, comparator.IntComparator)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = tree.Put("hello", "world")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+
+		if !errors.Is(err, comparator.ErrInvalidType) {
+			t.Errorf("expected error wrapping comparator.ErrInvalidType, got: %v", err)
+		}
+	})
+
+	t.Run("Get returns error on type mismatch", func(t *testing.T) {
+		tree, err := NewWith[string, any](3, comparator.IntComparator)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Populate root directly so Get reaches the comparison path.
+		tree.Root = &Node[string, any]{
+			Entries:  []*Entry[string, any]{{Key: "a", Value: 1}},
+			Children: []*Node[string, any]{},
+		}
+		tree.size = 1
+
+		_, _, err = tree.Get("b")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+
+		if !errors.Is(err, comparator.ErrInvalidType) {
+			t.Errorf("expected error wrapping comparator.ErrInvalidType, got: %v", err)
+		}
+	})
+
+	t.Run("Remove returns error on type mismatch", func(t *testing.T) {
+		tree, err := NewWith[string, any](3, comparator.IntComparator)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Populate root directly so Remove reaches the comparison path.
+		tree.Root = &Node[string, any]{
+			Entries:  []*Entry[string, any]{{Key: "a", Value: 1}},
+			Children: []*Node[string, any]{},
+		}
+		tree.size = 1
+
+		err = tree.Remove("a")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+
+		if !errors.Is(err, comparator.ErrInvalidType) {
+			t.Errorf("expected error wrapping comparator.ErrInvalidType, got: %v", err)
+		}
+	})
 }
 
 func benchmarkGet(b *testing.B, tree *Tree[int, any], size int) {

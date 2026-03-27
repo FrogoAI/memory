@@ -45,9 +45,9 @@ func TestListCopy(t *testing.T) {
 
 	l2 := New[string]()
 	l2.Append(l.List()...) // copy
-	testutils.Equal(t, l2.List(), []string{"test4", "test3", "test", "test1", "test2"})
-	testutils.Equal(t, l2.Front().Next().Value, "test1")
-	testutils.Equal(t, l2.Back().Prev().Value, "test3")
+	testutils.Equal(t, l2.List(), []string{"test2", "test1", "test", "test3", "test4"})
+	testutils.Equal(t, l2.Front().Next().Value, "test3")
+	testutils.Equal(t, l2.Back().Prev().Value, "test1")
 
 	testutils.Equal(t, l.ByID(test2.ID()).Value, "test2")
 	testutils.Equal(t, l.ByID(test2.ID()).Next().Value, "test1")

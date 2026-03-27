@@ -216,7 +216,7 @@ func (l *List[V]) Append(elements ...V) {
 	l.lazyInit()
 
 	for _, v := range elements {
-		l.PushFront(v)
+		l.PushBack(v)
 	}
 }
 

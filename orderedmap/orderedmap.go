@@ -22,7 +22,7 @@ func (o *OrderedMap[K, V]) Copy() *OrderedMap[K, V] {
 	return s
 }
 
-func (o *OrderedMap[K, V]) Truncate() {
+func (o *OrderedMap[K, V]) Clear() {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 

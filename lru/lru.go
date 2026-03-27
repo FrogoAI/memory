@@ -2,9 +2,8 @@ package lru
 
 import (
 	"container/list"
+	"fmt"
 	"sync"
-
-	"github.com/spf13/cast"
 )
 
 type Value[K any] struct {
@@ -65,6 +64,6 @@ func (c *Cache[K]) Put(key string, value K) {
 		prevKey := c.list.Back()
 		c.list.Remove(prevKey)
 
-		delete(c.index, cast.ToString(prevKey.Value))
+		delete(c.index, fmt.Sprint(prevKey.Value))
 	}
 }

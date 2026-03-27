@@ -1,6 +1,7 @@
 package sortedset
 
 import (
+	"fmt"
 	"math/rand"
 	"sync"
 
@@ -22,6 +23,16 @@ type SortedSet[K comparable, V comparable] struct {
 	length     uint64
 	level      int
 	mu         sync.RWMutex
+}
+
+// compare wraps the comparator and panics on type mismatch.
+func (s *SortedSet[K, V]) compare(a, b interface{}) int {
+	result, err := s.comparator(a, b)
+	if err != nil {
+		panic(fmt.Errorf("sortedset: %w", err))
+	}
+
+	return result
 }
 
 func (s *SortedSet[K, V]) createNode(level int, key K, value V) *Node[K, V] {
@@ -68,8 +79,8 @@ func (s *SortedSet[K, V]) insertNode(key K, value V) *Node[K, V] {
 		}
 
 		for x.level[i].forward != nil &&
-			(s.comparator(x.level[i].forward.key, key) < 0 ||
-				(s.comparator(x.level[i].forward.key, key) == 0 && // key is the same but the key is different
+			(s.compare(x.level[i].forward.key, key) < 0 ||
+				(s.compare(x.level[i].forward.key, key) == 0 && // key is the same but the key is different
 					x.level[i].forward.value != value)) {
 			rank[i] += x.level[i].span
 			x = x.level[i].forward
@@ -155,7 +166,7 @@ func (s *SortedSet[K, V]) delete(key K, value V) bool {
 
 	x := s.header
 	for i := s.level - 1; i >= 0; i-- {
-		for x.level[i].forward != nil && s.comparator(x.level[i].forward.key, key) < 0 {
+		for x.level[i].forward != nil && s.compare(x.level[i].forward.key, key) < 0 {
 			x = x.level[i].forward
 		}
 
@@ -190,13 +201,12 @@ func NewSortedSet[K comparable, V comparable](c comparator.Comparator) *SortedSe
 	return sortedSet
 }
 
-func (s *SortedSet[K, V]) GetCount() int {
+// Len returns the number of elements in the sorted set.
+func (s *SortedSet[K, V]) Len() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	l := int(s.length)
-
-	return l
+	return int(s.length)
 }
 
 // PeekMin get the element with minimum key, nil if the set is empty
@@ -261,7 +271,7 @@ func (s *SortedSet[K, V]) Upsert(key K, value V) bool {
 	found := s.dict[value]
 	if found != nil {
 		// key does not change, only update value
-		if s.comparator(found.key, key) == 0 {
+		if s.compare(found.key, key) == 0 {
 			found.value = value
 		} else { // key changes, delete and re-insert
 			s.delete(found.key, found.value)
@@ -338,7 +348,7 @@ func (s *SortedSet[K, V]) GetByKeyRange(start K, end K, options *GetByKeyRangeOp
 	excludeStart := options != nil && options.ExcludeStart
 	excludeEnd := options != nil && options.ExcludeEnd
 
-	reverse := s.comparator(start, end) > 0
+	reverse := s.compare(start, end) > 0
 	if reverse {
 		start, end = end, start
 		excludeStart, excludeEnd = excludeEnd, excludeStart
@@ -357,14 +367,14 @@ func (s *SortedSet[K, V]) GetByKeyRange(start K, end K, options *GetByKeyRangeOp
 		if excludeEnd {
 			for i := s.level - 1; i >= 0; i-- {
 				for x.level[i].forward != nil &&
-					s.comparator(x.level[i].forward.key, end) < 0 {
+					s.compare(x.level[i].forward.key, end) < 0 {
 					x = x.level[i].forward
 				}
 			}
 		} else {
 			for i := s.level - 1; i >= 0; i-- {
 				for x.level[i].forward != nil &&
-					s.comparator(x.level[i].forward.key, end) <= 0 {
+					s.compare(x.level[i].forward.key, end) <= 0 {
 					x = x.level[i].forward
 				}
 			}
@@ -372,11 +382,11 @@ func (s *SortedSet[K, V]) GetByKeyRange(start K, end K, options *GetByKeyRangeOp
 
 		for x != nil && limit > 0 {
 			if excludeStart {
-				if s.comparator(x.key, start) <= 0 {
+				if s.compare(x.key, start) <= 0 {
 					break
 				}
 			} else {
-				if s.comparator(x.key, start) < 0 {
+				if s.compare(x.key, start) < 0 {
 					break
 				}
 			}
@@ -398,14 +408,14 @@ func (s *SortedSet[K, V]) GetByKeyRange(start K, end K, options *GetByKeyRangeOp
 		if excludeStart {
 			for i := s.level - 1; i >= 0; i-- {
 				for x.level[i].forward != nil &&
-					s.comparator(x.level[i].forward.key, start) <= 0 {
+					s.compare(x.level[i].forward.key, start) <= 0 {
 					x = x.level[i].forward
 				}
 			}
 		} else {
 			for i := s.level - 1; i >= 0; i-- {
 				for x.level[i].forward != nil &&
-					s.comparator(x.level[i].forward.key, start) < 0 {
+					s.compare(x.level[i].forward.key, start) < 0 {
 					x = x.level[i].forward
 				}
 			}
@@ -416,11 +426,11 @@ func (s *SortedSet[K, V]) GetByKeyRange(start K, end K, options *GetByKeyRangeOp
 
 		for x != nil && limit > 0 {
 			if excludeEnd {
-				if s.comparator(x.key, end) >= 0 {
+				if s.compare(x.key, end) >= 0 {
 					break
 				}
 			} else {
-				if s.comparator(x.key, end) > 0 {
+				if s.compare(x.key, end) > 0 {
 					break
 				}
 			}
@@ -563,8 +573,8 @@ func (s *SortedSet[K, V]) FindRank(value V) int {
 		x := s.header
 		for i := s.level - 1; i >= 0; i-- {
 			for x.level[i].forward != nil &&
-				(s.comparator(x.level[i].forward.key, node.key) < 0 ||
-					(s.comparator(x.level[i].forward.key, node.key) == 0 &&
+				(s.compare(x.level[i].forward.key, node.key) < 0 ||
+					(s.compare(x.level[i].forward.key, node.key) == 0 &&
 						x.level[i].forward.value != node.value)) {
 				rank += int(x.level[i].span)
 				x = x.level[i].forward

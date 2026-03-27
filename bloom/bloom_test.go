@@ -13,7 +13,9 @@ var (
 )
 
 func TestCountingFilter(t *testing.T) {
-	f := NewCounting(3000, 0.01)
+	f, err := NewCounting(3000, 0.01)
+	testutils.Equal(t, err, nil)
+
 	f.Add(foo)
 	f.Add(foo)
 	f.Remove(foo)
@@ -30,7 +32,9 @@ func TestCountingFilter(t *testing.T) {
 }
 
 func TestDump(t *testing.T) {
-	f := NewCounting(3000, 0.01)
+	f, err := NewCounting(3000, 0.01)
+	testutils.Equal(t, err, nil)
+
 	f.Add(foo)
 	f.Add(bar)
 	f.Remove(foo)

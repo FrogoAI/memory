@@ -12,9 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/mfonda/simhash"
-	"github.com/sirbu/golang-common/hash/crc16"
 	"github.com/twmb/murmur3"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -131,11 +129,6 @@ func SplitBetweenTokens(data string, keys ...string) []string {
 // ByteSliceToString cast given bytes to string, without allocation memory
 func ByteSliceToString(b []byte) string {
 	return *(*string)(unsafe.Pointer(&b)) //nolint
-}
-
-// GetUniqueID return unique id
-func GetUniqueID() string {
-	return primitive.NewObjectID().Hex()
 }
 
 // GetShortID return short id
@@ -281,7 +274,7 @@ func RandStringBytes(n int) string {
 
 func HashName(name string) string {
 	name = strings.ToLower(name)
-	val := crc16.Checksum(crc16.XModem, []byte(name))
+	val := crc16XModem([]byte(name))
 
 	r := make([]byte, 2) //nolint:mnd
 	binary.BigEndian.PutUint16(r, val)

@@ -89,8 +89,8 @@ func (g *Group[K, V]) Iterator() chan V {
 	return g.entities.Iterator(bufferSize)
 }
 
-func (g *Group[K, V]) Truncate() {
-	g.entities.Truncate()
+func (g *Group[K, V]) Clear() {
+	g.entities.Clear()
 }
 
 func (g *Group[K, V]) GetMap() map[K]V {

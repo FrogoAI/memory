@@ -32,7 +32,7 @@ func (s *SafeList[V]) List() []V {
 	return dst
 }
 
-func (s *SafeList[V]) Reset() []V {
+func (s *SafeList[V]) Clear() []V {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

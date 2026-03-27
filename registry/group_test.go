@@ -59,7 +59,7 @@ func TestGroup(t *testing.T) {
 		}
 	}
 
-	r.TruncateGroup(KeyTemporary)
+	r.ClearGroup(KeyTemporary)
 
 	result = r.GetValues(KeyTemporary)
 	if len(result) != 0 {

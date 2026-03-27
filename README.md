@@ -2,7 +2,7 @@
 
 > A high-performance collection of generic data structures and algorithms for Go.
 
-`memory` provides a suite of specialized, type-safe in-memory data structures optimized for efficiency and specific use cases. Unlike the standard library's container packages, this repository offers advanced algorithms like **Locality Sensitive Hashing (SimDict)**, **Counting Bloom Filters**, **Fuzzy Search**, and **Ordered Maps**, all built using Go 1.18+ generics.
+`memory` provides a suite of specialized, type-safe in-memory data structures optimized for efficiency and specific use cases. Unlike the standard library's container packages, this repository offers advanced algorithms like **Counting Bloom Filters**, **Fuzzy Search**, and **Ordered Maps**, all built using Go 1.18+ generics.
 
 ## Features
 
@@ -10,8 +10,6 @@
 
 - **Bloom Filter (`bloom`):** Space-efficient probabilistic data structure for checking if an element is in a set. Includes a **Counting Bloom Filter** that supports removals.
 - **HyperLogLog (`hll`):** Efficient cardinality estimation for large datasets.
-- **SimDict (`simdict`):** A similarity dictionary using **Locality Sensitive Hashing (LSH)** to cluster similar documents or strings into buckets.
-
 ### 🔍 Search & String Algo
 
 - **Fuzzy Search (`fuzzysearch`):** Fast, lightweight fuzzy matching. Supports simple subsequence matching and **Levenshtein distance** ranking.
@@ -50,7 +48,10 @@ import (
 
 func main() {
 	// Initialize for 1000 items with 0.01 (1%) false positive rate
-	filter := bloom.NewCounting(1000, 0.01)
+	filter, err := bloom.NewCounting(1000, 0.01)
+	if err != nil {
+		panic(err)
+	}
 
 	data := []byte("user_123")
 
@@ -123,34 +124,7 @@ func main() {
 }
 ```
 
-### 4. SimDict (Similarity Clustering)
-
-Cluster documents into buckets based on similarity using LSH.
-
-Go
-
-```
-package main
-
-import (
-	"fmt"
-	"github.com/FrogoAI/memory/simdict"
-)
-
-func main() {
-	manager := simdict.NewLSHManager()
-
-	// Assign documents to buckets based on content similarity
-	bucket1 := manager.ProcessAndAssign("The quick brown fox")
-	bucket2 := manager.ProcessAndAssign("The quick brown fox jumps")
-	bucket3 := manager.ProcessAndAssign("Completely different text")
-
-	fmt.Println(bucket1 == bucket2) // true (Similar enough to share a bucket)
-	fmt.Println(bucket1 == bucket3) // false
-}
-```
-
-### 5. Registry
+### 4. Registry
 
 Manage grouped resources (e.g., connections per user) safely.
 

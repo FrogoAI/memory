@@ -9,6 +9,35 @@ import (
 	"github.com/FrogoAI/memory/comparator"
 )
 
+// comparatorError is a sentinel type used with panic/recover to propagate
+// comparator failures out of deep call chains without changing internal signatures.
+type comparatorError struct {
+	err error
+}
+
+// recoverComparatorError catches comparatorError panics and stores them in *errp.
+// Any other panic is re-raised.
+func recoverComparatorError(errp *error) {
+	if r := recover(); r != nil {
+		if ce, ok := r.(comparatorError); ok {
+			*errp = ce.err
+		} else {
+			panic(r)
+		}
+	}
+}
+
+// compare wraps the Comparator and panics with comparatorError on type mismatch.
+// Public methods recover this panic and return it as an error.
+func (tree *Tree[K, V]) compare(a, b interface{}) int {
+	result, err := tree.Comparator(a, b)
+	if err != nil {
+		panic(comparatorError{err: fmt.Errorf("btree compare: %w", err)})
+	}
+
+	return result
+}
+
 const (
 	MinOrder = 3
 )
@@ -44,43 +73,57 @@ func NewWithStringComparator(order int) (*Tree[string, any], error) {
 
 // Put inserts key-value pair node into the tree.
 // If key already exists, then its value is updated with the new value.
-// Key should adhere to the comparator's type assertion, otherwise method panics.
-func (tree *Tree[K, V]) Put(key K, value V) {
+// Returns an error if the key type does not match the comparator.
+func (tree *Tree[K, V]) Put(key K, value V) (err error) {
+	defer recoverComparatorError(&err)
+
 	entry := &Entry[K, V]{Key: key, Value: value}
 
 	if tree.Root == nil {
+		// Validate that the key type is compatible with the comparator
+		// before inserting the first entry.
+		tree.compare(key, key)
+
 		tree.Root = &Node[K, V]{Entries: []*Entry[K, V]{entry}, Children: []*Node[K, V]{}}
 		tree.size++
 
-		return
+		return nil
 	}
 
 	if tree.insert(tree.Root, entry) {
 		tree.size++
 	}
+
+	return nil
 }
 
-// Get searches the node in the tree by key and returns its value or nil if key is not found in tree.
+// Get searches the node in the tree by key and returns its value or the zero value if not found.
 // Second return parameter is true if key was found, otherwise false.
-// Key should adhere to the comparator's type assertion, otherwise method panics.
-func (tree *Tree[K, V]) Get(key K) (value V, found bool) {
+// Returns an error if the key type does not match the comparator.
+func (tree *Tree[K, V]) Get(key K) (value V, found bool, err error) {
+	defer recoverComparatorError(&err)
+
 	node, index, found := tree.searchRecursively(tree.Root, key)
 	if found {
-		return node.Entries[index].Value, true
+		return node.Entries[index].Value, true, nil
 	}
 
-	return
+	return value, false, nil
 }
 
-// Remove remove the node from the tree by key.
-// Key should adhere to the comparator's type assertion, otherwise method panics.
-func (tree *Tree[K, V]) Remove(key K) {
+// Remove removes the node from the tree by key.
+// Returns an error if the key type does not match the comparator.
+func (tree *Tree[K, V]) Remove(key K) (err error) {
+	defer recoverComparatorError(&err)
+
 	node, index, found := tree.searchRecursively(tree.Root, key)
 	if found {
 		tree.delete(node, index)
 
 		tree.size--
 	}
+
+	return nil
 }
 
 // Empty returns true if tree does not contain any nodes
@@ -88,8 +131,8 @@ func (tree *Tree[K, V]) Empty() bool {
 	return tree.size == 0
 }
 
-// Size returns number of nodes in the tree.
-func (tree *Tree[K, V]) Size() int {
+// Len returns the number of keys in the tree.
+func (tree *Tree[K, V]) Len() int {
 	return tree.size
 }
 
@@ -242,7 +285,7 @@ func (tree *Tree[K, V]) search(node *Node[K, V], key any) (index int, found bool
 
 	for low <= high {
 		mid = (high + low) / 2 // nolint:mnd
-		compare := tree.Comparator(key, node.Entries[mid].Key)
+		compare := tree.compare(key, node.Entries[mid].Key)
 
 		switch {
 		case compare > 0:

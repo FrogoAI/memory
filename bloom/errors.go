@@ -2,4 +2,7 @@ package bloom
 
 import "errors"
 
-var ErrEmptyDump = errors.New("empty dump")
+var (
+	ErrEmptyDump    = errors.New("empty dump")
+	ErrBitsetTooBig = errors.New("bitset overflow: parameters require more than 2^32 bits")
+)
