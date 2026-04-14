@@ -11,7 +11,7 @@ require (
 	github.com/segmentio/go-hll v1.0.1
 	github.com/spf13/cast v1.10.0
 	github.com/twmb/murmur3 v1.1.8
-	golang.org/x/text v0.33.0
+	golang.org/x/text v0.36.0
 )
 
 require (
